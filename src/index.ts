@@ -3,6 +3,7 @@ import {
     containsPoint,
     defaultBalloonConfig,
     drawBalloon,
+    popBalloon,
     updateBalloon
 } from './balloon'
 import { popWithForce, RELEASE_IMPULSE, updateBalloonPhysics } from './physics'
@@ -40,6 +41,13 @@ let width = 0
 let height = 0
 let previousCount = -1
 let lastTime = 0
+
+// For popping balloons sequentially when reset is pressed
+const RESET_POP_INTERVAL = 0.075
+
+let resetQueue: Balloon[] = []
+let resetElapsed = 0
+let resetting = false
 
 function randomPastelColor(): string {
     const hue = Math.random() * 360
@@ -100,6 +108,48 @@ function reset(): void {
     updateCounter()
 }
 
+function resetBalloons(): void {
+    if (resetting) return
+
+    resetting = true
+    resetElapsed = 0
+
+    resetQueue = balloons.filter(b => !b.popped)
+
+    // Randomize the popping order
+    for (let i = resetQueue.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+
+        const temp = resetQueue[i]
+        resetQueue[i] = resetQueue[j]
+        resetQueue[j] = temp
+    }
+}
+
+function updateReset(dt: number): void {
+    if (!resetting) return
+
+    resetElapsed += dt
+
+    while (
+        resetQueue.length > 0 &&
+        resetElapsed >= RESET_POP_INTERVAL
+    ) {
+        resetElapsed -= RESET_POP_INTERVAL
+
+        const balloon = resetQueue.pop()!
+
+        if (!balloon.popped) {
+            popBalloon(balloon)
+        }
+    }
+
+    if (resetQueue.length === 0) {
+        reset()
+        resetting = false
+    }
+}
+
 function updateCounter(): void {
     if (balloons.length === previousCount) return
     previousCount = balloons.length
@@ -107,6 +157,8 @@ function updateCounter(): void {
 }
 
 function update(dt: number): void {
+    updateReset(dt)
+
     for (const balloon of balloons) {
         updateBalloon(balloon, dt, width, height, balloonConfig)
     }
@@ -115,7 +167,11 @@ function update(dt: number): void {
 
     for (let i = balloons.length - 1; i >= 0; i--) {
         const balloon = balloons[i]
-        if (balloon.popped && balloon.popTime >= balloonConfig.popDuration) {
+
+        if (
+            balloon.popped &&
+            balloon.popTime >= balloonConfig.popDuration
+        ) {
             balloons.splice(i, 1)
         }
     }
@@ -157,7 +213,7 @@ function frame(time: number): void {
     profileRender += t2 - t1
     profileFrames++
 
-    if (time - profileStart >= 1000) {
+    if (time - profileStart >= 5000) {
         console.log({
             balloons: balloons.length,
             fps: Math.round(
@@ -186,6 +242,7 @@ canvas.addEventListener('contextmenu', event => event.preventDefault())
 
 canvas.addEventListener('pointerdown', event => {
     event.preventDefault()
+    if (resetting) return
     const { x, y } = canvasPosition(event)
 
     for (let i = balloons.length - 1; i >= 0; i--) {
@@ -264,7 +321,7 @@ canvas.addEventListener('pointercancel', event => releaseBalloon(event.pointerId
 canvas.addEventListener('lostpointercapture', event => releaseBalloon(event.pointerId))
 
 window.addEventListener('resize', resize)
-document.getElementById('reset')?.addEventListener('click', reset)
+document.getElementById('reset')?.addEventListener('click', resetBalloons)
 background.addEventListener('load', drawBackground)
 background.src = '/bg.png'
 resize()

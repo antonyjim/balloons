@@ -95,9 +95,11 @@ type BalloonSprite = {
     height: number
 }
 
-const spriteCache = new WeakMap<Balloon, BalloonSprite>()
+const spriteCache = new Map<string, BalloonSprite>()
+
 const SPRITE_BUCKET = 4
 const SPRITE_SCALE = 1.5
+
 
 export function drawBalloon(
     ctx: CanvasRenderingContext2D,
@@ -113,11 +115,13 @@ export function drawBalloon(
         Math.ceil(balloon.radius / SPRITE_BUCKET) * SPRITE_BUCKET
     )
 
-    let sprite = spriteCache.get(balloon)
+    const key = `${balloon.color}:${radius}`
 
-    if (!sprite || sprite.radius !== radius || sprite.color !== balloon.color) {
+    let sprite = spriteCache.get(key)
+
+    if (!sprite) {
         sprite = createBalloonSprite(balloon, radius)
-        spriteCache.set(balloon, sprite)
+        spriteCache.set(key, sprite)
     }
 
     const scale = balloon.radius / sprite.radius
@@ -171,122 +175,256 @@ function drawBalloonVector(
     ctx: CanvasRenderingContext2D,
     balloon: Balloon
 ): void {
-
     const r = balloon.radius
     const w = r * 0.78
+    const rgb = colorToRgb(ctx, balloon.color)
 
     ctx.save()
-
     ctx.translate(balloon.x, balloon.y)
     ctx.rotate(balloon.angle)
 
+    // --------------------------------------------------
+    // Balloon silhouette
+    // --------------------------------------------------
 
-    // Body - full/rounded with a sharp taper near the knot
+    const body = new Path2D()
 
-    ctx.beginPath()
+    body.moveTo(0, -r)
 
-    // Top center
-    ctx.moveTo(0, -r)
-
-    // Upper-right: quickly expands outward
-    ctx.bezierCurveTo(
+    body.bezierCurveTo(
         w * 0.65, -r,
         w, -r * 0.62,
         w, -r * 0.20
     )
 
-    // Right side: broad through the middle
-    ctx.bezierCurveTo(
+    body.bezierCurveTo(
         w, r * 0.25,
         w * 0.82, r * 0.52,
         w * 0.55, r * 0.72
     )
 
-    // Lower-right: long taper directly into neck
-    ctx.bezierCurveTo(
+    body.bezierCurveTo(
         w * 0.35, r * 0.87,
         w * 0.14, r * 0.98,
         0, r
     )
 
-    // Lower-left
-    ctx.bezierCurveTo(
+    body.bezierCurveTo(
         -w * 0.14, r * 0.98,
         -w * 0.35, r * 0.87,
         -w * 0.55, r * 0.72
     )
 
-    // Left side
-    ctx.bezierCurveTo(
+    body.bezierCurveTo(
         -w * 0.82, r * 0.52,
         -w, r * 0.25,
         -w, -r * 0.20
     )
 
-    // Upper-left
-    ctx.bezierCurveTo(
+    body.bezierCurveTo(
         -w, -r * 0.62,
         -w * 0.65, -r,
         0, -r
     )
 
-    ctx.closePath()
+    body.closePath()
 
-    ctx.fillStyle = balloon.color
-    ctx.fill()
+    // --------------------------------------------------
+    // Translucent base
+    // --------------------------------------------------
 
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)'
-    ctx.lineWidth = Math.max(1, r * 0.025)
+    const base = ctx.createRadialGradient(
+        -r * 0.18, -r * 0.28, r * 0.05,
+        0, 0, r * 1.05
+    )
+
+    base.addColorStop(0, rgba(rgb, 0.12))
+    base.addColorStop(0.45, rgba(rgb, 0.24))
+    base.addColorStop(0.75, rgba(rgb, 0.52))
+    base.addColorStop(1, rgba(rgb, 0.88))
+
+    ctx.fillStyle = base
+    ctx.fill(body)
+
+    // All internal effects remain inside the balloon
+    ctx.save()
+    ctx.clip(body)
+
+    // --------------------------------------------------
+    // Dark lower-right interior reflection
+    // --------------------------------------------------
+
+    const shade = ctx.createRadialGradient(
+        r * 0.34, r * 0.28, 0,
+        r * 0.34, r * 0.28, r * 0.78
+    )
+
+    shade.addColorStop(0, 'rgba(10, 16, 24, 0.16)')
+    shade.addColorStop(0.55, 'rgba(18, 20, 35, 0.06)')
+    shade.addColorStop(1, 'rgba(0, 0, 0, 0)')
+
+
+    ctx.fillStyle = shade
+    ctx.fillRect(-r, -r, r * 2, r * 2.2)
+
+    // --------------------------------------------------
+    // Colored rim illumination
+    // --------------------------------------------------
+
+    const rim = ctx.createRadialGradient(
+        -r * 0.12, -r * 0.12, r * 0.35,
+        0, 0, r * 1.02
+    )
+
+    rim.addColorStop(0, 'rgba(255, 255, 255, 0)')
+    rim.addColorStop(0.65, rgba(rgb, 0.02))
+    rim.addColorStop(0.87, rgba(rgb, 0.22))
+    rim.addColorStop(1, rgba(rgb, 0.55))
+
+    ctx.fillStyle = rim
+    ctx.fillRect(-r, -r, r * 2, r * 2.2)
+
+    // --------------------------------------------------
+    // Large irregular glossy reflection
+    // --------------------------------------------------
+
+    const reflection = new Path2D()
+
+    reflection.moveTo(-r * 0.37, -r * 0.72)
+
+    reflection.bezierCurveTo(
+        -r * 0.52, -r * 0.66,
+        -r * 0.55, -r * 0.35,
+        -r * 0.47, -r * 0.07
+    )
+
+    reflection.bezierCurveTo(
+        -r * 0.39, r * 0.10,
+        -r * 0.28, r * 0.14,
+        -r * 0.20, r * 0.06
+    )
+
+    reflection.bezierCurveTo(
+        -r * 0.29, -r * 0.13,
+        -r * 0.36, -r * 0.40,
+        -r * 0.20, -r * 0.64
+    )
+
+    reflection.bezierCurveTo(
+        -r * 0.26, -r * 0.72,
+        -r * 0.32, -r * 0.75,
+        -r * 0.37, -r * 0.72
+    )
+
+    reflection.closePath()
+
+    const gloss = ctx.createLinearGradient(
+        -r * 0.5, -r * 0.5,
+        -r * 0.1, r * 0.1
+    )
+
+    gloss.addColorStop(0, 'rgba(255, 255, 255, 0.65)')
+    gloss.addColorStop(0.35, 'rgba(255, 255, 255, 0.68)')
+    gloss.addColorStop(1, 'rgba(255, 255, 255, 0.04)')
+
+    ctx.fillStyle = gloss
+    ctx.fill(reflection)
+
+    // --------------------------------------------------
+    // Soft glow around reflection
+    // --------------------------------------------------
+
+    const glow = ctx.createRadialGradient(
+        -r * 0.32, -r * 0.38, 0,
+        -r * 0.32, -r * 0.38, r * 0.48
+    )
+
+    glow.addColorStop(0, 'rgba(255, 255, 255, 0.22)')
+    glow.addColorStop(0.5, 'rgba(255, 255, 255, 0.09)')
+    glow.addColorStop(1, 'rgba(255, 255, 255, 0)')
+
+    ctx.fillStyle = glow
+    ctx.fillRect(-r, -r, r * 2, r * 2)
+
+    // --------------------------------------------------
+    // Secondary curved reflection on right edge
+    // --------------------------------------------------
+
+    ctx.beginPath()
+
+    ctx.moveTo(r * 0.42, -r * 0.63)
+
+    ctx.bezierCurveTo(
+        r * 0.68, -r * 0.40,
+        r * 0.71, r * 0.05,
+        r * 0.48, r * 0.34
+    )
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.40)'
+    ctx.lineWidth = Math.max(1, r * 0.065)
+    ctx.lineCap = 'round'
     ctx.stroke()
 
-    // Knot - proportional to balloon
+    // --------------------------------------------------
+    // Lower internal colored reflection
+    // --------------------------------------------------
+
+    const lower = ctx.createRadialGradient(
+        -r * 0.18, r * 0.48, 0,
+        -r * 0.18, r * 0.48, r * 0.50
+    )
+
+    lower.addColorStop(0, 'rgba(255, 255, 255, 0.24)')
+    lower.addColorStop(0.45, rgba(rgb, 0.18))
+    lower.addColorStop(1, rgba(rgb, 0))
+
+    ctx.fillStyle = lower
+    ctx.fillRect(-r, 0, r * 2, r)
+
+    ctx.restore()
+
+    // --------------------------------------------------
+    // Outline
+    // --------------------------------------------------
+
+    ctx.strokeStyle = rgba(rgb, 0.85)
+    ctx.lineWidth = Math.max(1.2, r * 0.035)
+    ctx.stroke(body)
+
+    // Thin dark edge for definition
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.28)'
+    ctx.lineWidth = Math.max(0.7, r * 0.012)
+    ctx.stroke(body)
+
+    // --------------------------------------------------
+    // Knot
+    // --------------------------------------------------
+
     const knotWidth = r * 0.14
     const knotHeight = r * 0.16
 
-    ctx.beginPath()
+    const knot = new Path2D()
 
-    ctx.moveTo(0, r * 0.96)
+    knot.moveTo(0, r * 0.96)
+    knot.lineTo(-knotWidth, r + knotHeight)
+    knot.lineTo(knotWidth, r + knotHeight)
+    knot.closePath()
 
-    ctx.lineTo(
-        -knotWidth,
-        r + knotHeight
+    const knotGradient = ctx.createLinearGradient(
+        -knotWidth, r,
+        knotWidth, r + knotHeight
     )
 
-    ctx.lineTo(
-        knotWidth,
-        r + knotHeight
-    )
+    knotGradient.addColorStop(0, rgba(rgb, 0.95))
+    knotGradient.addColorStop(0.5, rgba(rgb, 0.55))
+    knotGradient.addColorStop(1, rgba(rgb, 0.95))
 
-    ctx.closePath()
+    ctx.fillStyle = knotGradient
+    ctx.fill(knot)
 
-    ctx.fillStyle = balloon.color
-    ctx.fill()
-
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.28)'
+    ctx.strokeStyle = rgba(rgb, 0.9)
     ctx.lineWidth = Math.max(1, r * 0.025)
-    ctx.stroke()
-
-    // Don't shadow the highlight
-    ctx.shadowColor = 'transparent'
-    ctx.shadowBlur = 0
-    ctx.shadowOffsetX = 0
-    ctx.shadowOffsetY = 0
-
-    // Highlight
-    ctx.beginPath()
-
-    ctx.ellipse(
-        -r * 0.27,
-        -r * 0.32,
-        r * 0.09,
-        r * 0.22,
-        -0.4,
-        0,
-        Math.PI * 2
-    )
-
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.42)'
-    ctx.fill()
+    ctx.stroke(knot)
 
     ctx.restore()
 }
@@ -298,29 +436,37 @@ function drawPop(
     const duration = 0.5
     const progress = Math.min(balloon.popTime / duration, 1)
 
-    const size = balloon.radius * (0.8 + progress * 0.5)
-    const inner = size * 0.3
+    if (progress >= 1) return
+
+    const count = 35
+    const fade = Math.pow(1 - progress, 1.5)
 
     ctx.save()
-
     ctx.translate(balloon.x, balloon.y)
-    ctx.globalAlpha = 1 - progress
 
-    ctx.beginPath()
+    for (let i = 0; i < count; i++) {
+        const angle = i * 2.399963229728653
+        const random = (Math.sin(i * 127.1 + 78.233) * 43758.5453) % 1
+        const variation = Math.abs(random)
 
-    ctx.moveTo(0, -size)
-    ctx.lineTo(inner, -inner)
-    ctx.lineTo(size, 0)
-    ctx.lineTo(inner, inner)
-    ctx.lineTo(0, size)
-    ctx.lineTo(-inner, inner)
-    ctx.lineTo(-size, 0)
-    ctx.lineTo(-inner, -inner)
+        const distance =
+            balloon.radius * (0.15 + variation * 0.65) +
+            balloon.radius * progress * (0.3 + variation * 0.9)
 
-    ctx.closePath()
+        const x = Math.cos(angle) * distance
+        const y = Math.sin(angle) * distance
 
-    ctx.fillStyle = '#ff3f3f'
-    ctx.fill()
+        const size =
+            Math.max(0.7, balloon.radius * (0.012 + variation * 0.035)) *
+            (1 - progress * 0.6)
+
+        ctx.globalAlpha = fade * (0.45 + variation * 0.55)
+        ctx.fillStyle = '#ffffff'
+
+        ctx.beginPath()
+        ctx.arc(x, y, size, 0, Math.PI * 2)
+        ctx.fill()
+    }
 
     ctx.restore()
 }
@@ -348,6 +494,46 @@ export function containsPoint(
         (localX * localX) / (rx * rx) +
         (localY * localY) / (ry * ry)
     ) <= 1
+}
+
+
+function colorToRgb(
+    colorCtx: CanvasRenderingContext2D,
+    color: string): [number, number, number] {
+    colorCtx.fillStyle = '#000000'
+    colorCtx.fillStyle = color
+
+    const hex = colorCtx.fillStyle
+
+    if (hex.startsWith('#')) {
+        const value = hex.slice(1)
+        const expanded = value.length === 3
+            ? value.split('').map(c => c + c).join('')
+            : value
+
+        const n = parseInt(expanded.slice(0, 6), 16)
+
+        return [
+            (n >> 16) & 255,
+            (n >> 8) & 255,
+            n & 255
+        ]
+    }
+
+    const values = hex.match(/[\d.]+/g)?.map(Number) ?? []
+
+    return [
+        values[0] ?? 0,
+        values[1] ?? 0,
+        values[2] ?? 0
+    ]
+}
+
+function rgba(
+    rgb: [number, number, number],
+    alpha: number
+): string {
+    return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`
 }
 
 export function popBalloon(balloon: Balloon): void {
