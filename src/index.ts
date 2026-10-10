@@ -23,6 +23,9 @@ function requireContext(element: HTMLCanvasElement): CanvasRenderingContext2D {
 }
 
 const canvas = requireCanvas()
+canvas.addEventListener('contextmenu', e => {
+    e.preventDefault()
+})
 const ctx = requireContext(canvas)
 
 const isMobile = window.matchMedia('(pointer: coarse)').matches
