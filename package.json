@@ -1,0 +1,22 @@
+{
+  "name": "balloons",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "dev:ts": "tsc --watch --preserveWatchOutput",
+    "dev:webpack": "webpack serve --mode development",
+    "dev": "concurrently \"npm:dev:ts\" \"npm:dev:webpack\"",
+    "build": "tsc && webpack --mode production"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.4",
+    "typescript": "^7.0.2",
+    "webpack": "^5.109.2",
+    "webpack-cli": "^7.2.2",
+    "webpack-dev-server": "^6.0.0"
+  }
+}

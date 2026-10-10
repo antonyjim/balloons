@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="768" viewBox="0 0 512 768">
+  <defs>
+    <radialGradient id="balloonFill" cx="35%" cy="24%" r="78%">
+      <stop offset="0%" stop-color="#ff6b6b"/>
+      <stop offset="38%" stop-color="#ff2b2b"/>
+      <stop offset="72%" stop-color="#e40000"/>
+      <stop offset="100%" stop-color="#9f0000"/>
+    </radialGradient>
+
+    <linearGradient id="knotFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff4b4b"/>
+      <stop offset="100%" stop-color="#b60000"/>
+    </linearGradient>
+
+    <linearGradient id="reflectionFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.92"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <clipPath id="balloonClip">
+      <path d="M256 70
+               C145 70 78 160 78 292
+               C78 421 164 512 240 561
+               C247 566 251 576 256 590
+               C261 576 265 566 272 561
+               C348 512 434 421 434 292
+               C434 160 367 70 256 70 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Balloon body -->
+  <path
+    d="M256 70
+       C145 70 78 160 78 292
+       C78 421 164 512 240 561
+       C247 566 251 576 256 590
+       C261 576 265 566 272 561
+       C348 512 434 421 434 292
+       C434 160 367 70 256 70 Z"
+    fill="url(#balloonFill)"
+  />
+
+  <!-- Soft edge shading -->
+  <ellipse
+    cx="312"
+    cy="316"
+    rx="116"
+    ry="220"
+    fill="#6f0000"
+    opacity="0.10"
+    clip-path="url(#balloonClip)"
+  />
+
+  <!-- Main reflection -->
+  <path
+    d="M145 154
+       C112 200 101 264 110 323
+       C117 366 134 395 154 417
+       C144 366 150 304 168 252
+       C186 201 214 163 250 138
+       C213 130 173 137 145 154 Z"
+    fill="url(#reflectionFill)"
+    opacity="0.72"
+    clip-path="url(#balloonClip)"
+  />
+
+  <!-- Sharp highlight streak -->
+  <path
+    d="M137 190
+       C154 160 182 140 213 130
+       C197 149 184 170 173 194
+       C159 224 149 255 145 290"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="18"
+    stroke-linecap="round"
+    opacity="0.58"
+    clip-path="url(#balloonClip)"
+  />
+
+  <!-- Small specular highlight -->
+  <ellipse
+    cx="176"
+    cy="196"
+    rx="24"
+    ry="42"
+    transform="rotate(28 176 196)"
+    fill="#ffffff"
+    opacity="0.52"
+    clip-path="url(#balloonClip)"
+  />
+
+  <!-- Knot -->
+  <path
+    d="M241 584
+       L271 584
+       L281 614
+       Q256 627 231 614
+       Z"
+    fill="url(#knotFill)"
+  />
+
+  <path
+    d="M248 588
+       L256 610
+       L264 588"
+    fill="none"
+    stroke="#ff7777"
+    stroke-width="4"
+    stroke-linecap="round"
+    opacity="0.65"
+  />
+</svg>

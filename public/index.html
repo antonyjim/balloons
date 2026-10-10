@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Balloons Test</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+
+        .overlay {
+            position: absolute;
+            left: 10px;
+            top: 10px;
+        }
+
+        .overlay button {
+            border-radius: 3px;
+            color: #5c34ee;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="app"></canvas>
+    <div class="overlay">
+        <span id="counter"></span>
+        <button id="reset">Reset</button>
+    </div>
+    <script src="/app.js"></script>
+</body>
+
+</html>
