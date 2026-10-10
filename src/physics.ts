@@ -46,7 +46,7 @@ function clampSpin(balloon: Balloon): void {
 export function popWithForce(balloons: Balloon[], popped: Balloon): void {
     if (popped.popped) return
     popBalloon(popped)
-    playPopSound()
+    
 
     const range = popped.radius * POP_RADIUS_MULTIPLIER
     const rangeSq = range * range

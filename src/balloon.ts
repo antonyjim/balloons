@@ -1,3 +1,5 @@
+import { playPopSound } from "./audio"
+
 export interface Balloon {
     pointerId: number | null
 
@@ -537,6 +539,7 @@ function rgba(
 }
 
 export function popBalloon(balloon: Balloon): void {
+    playPopSound()
     balloon.growing = false
     balloon.pointerId = null
     balloon.popped = true
