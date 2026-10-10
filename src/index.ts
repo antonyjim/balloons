@@ -1,5 +1,6 @@
 import {
     Balloon,
+    BalloonConfig,
     containsPoint,
     defaultBalloonConfig,
     drawBalloon,
@@ -24,10 +25,12 @@ function requireContext(element: HTMLCanvasElement): CanvasRenderingContext2D {
 const canvas = requireCanvas()
 const ctx = requireContext(canvas)
 
-const balloonConfig = {
+const isMobile = window.matchMedia('(pointer: coarse)').matches
+
+const balloonConfig: BalloonConfig = {
     ...defaultBalloonConfig,
-    maxScreenRatio: 1 / 5,
-    popAtMax: false
+    growthRate: isMobile ? 45 : 80,
+    maxScreenRatio: isMobile ? 0.65 : 1 / 3
 }
 
 const balloons: Balloon[] = []

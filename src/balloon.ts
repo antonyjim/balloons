@@ -42,7 +42,7 @@ export const defaultBalloonConfig: BalloonConfig = {
     growthRate: 80,
     maxScreenRatio: 1 / 3,
 
-    popAtMax: true,
+    popAtMax: false,
     popDuration: 0.5,
 
     damping: 5,
