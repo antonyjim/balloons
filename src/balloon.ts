@@ -1,5 +1,3 @@
-import { stopInflateSound } from "./audio"
-
 export interface Balloon {
     pointerId: number | null
 
@@ -38,7 +36,7 @@ export interface BalloonConfig {
 }
 
 export const defaultBalloonConfig: BalloonConfig = {
-    initialRadius: 5,
+    initialRadius: 35,
     growthRate: 80,
     maxScreenRatio: 1 / 3,
 
@@ -50,10 +48,6 @@ export const defaultBalloonConfig: BalloonConfig = {
     collisionRestitution: 0.15,
     collisionPadding: 2
 }
-
-const isControlled = (balloon: Balloon) =>
-    balloon.pointerId !== null && balloon.growing
-
 
 export function updateBalloon(
     balloon: Balloon,
@@ -88,24 +82,22 @@ export function updateBalloon(
         }
     }
 
-    if (balloon.pointerId !== null) {
-        const dx =
-            balloon.anchorX - balloon.x
 
-        const dy =
-            balloon.anchorY - balloon.y
-
-        balloon.vx +=
-            dx *
-            config.anchorStrength *
-            dt
-
-        balloon.vy +=
-            dy *
-            config.anchorStrength *
-            dt
-    }
 }
+
+type BalloonSprite = {
+    canvas: HTMLCanvasElement
+    radius: number
+    color: string
+    left: number
+    top: number
+    width: number
+    height: number
+}
+
+const spriteCache = new WeakMap<Balloon, BalloonSprite>()
+const SPRITE_BUCKET = 4
+const SPRITE_SCALE = 1.5
 
 export function drawBalloon(
     ctx: CanvasRenderingContext2D,
@@ -116,6 +108,70 @@ export function drawBalloon(
         return
     }
 
+    const radius = Math.max(
+        SPRITE_BUCKET,
+        Math.ceil(balloon.radius / SPRITE_BUCKET) * SPRITE_BUCKET
+    )
+
+    let sprite = spriteCache.get(balloon)
+
+    if (!sprite || sprite.radius !== radius || sprite.color !== balloon.color) {
+        sprite = createBalloonSprite(balloon, radius)
+        spriteCache.set(balloon, sprite)
+    }
+
+    const scale = balloon.radius / sprite.radius
+
+    ctx.save()
+    ctx.translate(balloon.x, balloon.y)
+    ctx.rotate(balloon.angle)
+    ctx.drawImage(
+        sprite.canvas,
+        sprite.left * scale,
+        sprite.top * scale,
+        sprite.width * scale,
+        sprite.height * scale
+    )
+    ctx.restore()
+}
+
+function createBalloonSprite(balloon: Balloon, radius: number): BalloonSprite {
+    // Margin includes the knot and antialiased stroke.
+    const left = -radius * 1.05
+    const top = -radius * 1.1
+    const width = radius * 2.1
+    const height = radius * 2.4
+
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.ceil(width * SPRITE_SCALE)
+    canvas.height = Math.ceil(height * SPRITE_SCALE)
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('Unable to create balloon sprite')
+
+    ctx.setTransform(
+        SPRITE_SCALE, 0, 0, SPRITE_SCALE,
+        -left * SPRITE_SCALE,
+        -top * SPRITE_SCALE
+    )
+
+    // Draw once at the bucket radius, centered around the local origin.
+    drawBalloonVector(ctx, {
+        ...balloon,
+        x: 0,
+        y: 0,
+        angle: 0,
+        radius
+    })
+
+    return { canvas, radius, color: balloon.color, left, top, width, height }
+}
+
+function drawBalloonVector(
+    ctx: CanvasRenderingContext2D,
+    balloon: Balloon
+): void {
+
     const r = balloon.radius
     const w = r * 0.78
 
@@ -124,11 +180,6 @@ export function drawBalloon(
     ctx.translate(balloon.x, balloon.y)
     ctx.rotate(balloon.angle)
 
-    // Shadow applies to body + knot
-    // ctx.shadowColor = 'rgba(0, 0, 0, 0.3)'
-    // ctx.shadowBlur = r * 0.12
-    // ctx.shadowOffsetX = r * 0.06
-    // ctx.shadowOffsetY = r * 0.08
 
     // Body - full/rounded with a sharp taper near the knot
 
@@ -185,13 +236,6 @@ export function drawBalloon(
     ctx.fill()
 
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)'
-    ctx.lineWidth = Math.max(1, r * 0.025)
-    ctx.stroke()
-
-    ctx.fillStyle = balloon.color
-    ctx.fill()
-
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.28)'
     ctx.lineWidth = Math.max(1, r * 0.025)
     ctx.stroke()
 
@@ -295,10 +339,14 @@ export function containsPoint(
 
     const dx = x - balloon.x
     const dy = y - balloon.y
+    const cos = Math.cos(balloon.angle)
+    const sin = Math.sin(balloon.angle)
+    const localX = dx * cos + dy * sin
+    const localY = -dx * sin + dy * cos
 
     return (
-        (dx * dx) / (rx * rx) +
-        (dy * dy) / (ry * ry)
+        (localX * localX) / (rx * rx) +
+        (localY * localY) / (ry * ry)
     ) <= 1
 }
 

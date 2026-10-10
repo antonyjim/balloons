@@ -1,4 +1,5 @@
 const path = require('path')
+const CopyWebpackPlugin = require('copy-webpack-plugin')
 
 module.exports = {
   mode: 'development',
@@ -9,6 +10,15 @@ module.exports = {
     path: path.resolve(__dirname, 'dist'),
     clean: true
   },
+
+  plugins: [
+        new CopyWebpackPlugin({
+            patterns: [
+                { from: 'public', to: '.' }
+            ]
+        })
+    ],
+
 
   devtool: 'source-map',
 

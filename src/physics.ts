@@ -1,119 +1,72 @@
 import { playPopSound } from './audio'
 import { Balloon, BalloonConfig, popBalloon } from './balloon'
 
-const VELOCITY_DAMPING = 0.995
-const ANGULAR_DAMPING = 0.999
-
-const COLLISION_SPEED_RETENTION = 0.94
-
-const MIN_SPEED = 0.01
-const MIN_ANGULAR_SPEED = 0.0005
-
-const MAX_SPEED = 2000
-const MAX_ANGULAR_SPEED = 3
-
-const ROTATION_TRANSFER = 0.002
-
+const MAX_SPEED = 850
+const MAX_ANGULAR_SPEED = 2.5
+const ROTATION_TRANSFER = 0.0015
+const WALL_RETENTION = 0.78
 const POP_RADIUS_MULTIPLIER = 4
-const FLOAT_FORCE = 6
+const POP_IMPULSE = 500
+const PUSH_BASE_IMPULSE = 45
+const PUSH_PENETRATION_IMPULSE = 2
 
-const PUSH_BASE_IMPULSE = 700
-const PUSH_PENETRATION_IMPULSE = 50
+export const RELEASE_IMPULSE = 525
+// Smooth, low-frequency atmospheric acceleration (pixels/second squared).
+const AMBIENT_GRAVITY = 15
+const AMBIENT_BUOYANCY = 5
+const AMBIENT_DRIFT = 25
+const AMBIENT_SPIN = 0.8
+const AMBIENT_CURVE = 0.7
+const AMBIENT_CURVE_FREQUENCY = 0.45
+const LINEAR_DRAG = 0.65
+const ANGULAR_DRAG = 0.45
 
-export const RELEASE_IMPULSE = 500
-const POP_IMPULSE = 1000
+let ambientTime = 0
 
-const WALL_RETENTION = 0.92
-const BALLON_RESTITUTION = 0.96
+// Reuse the cells and their arrays between frames.
+const cells = new Map<number, Balloon[]>()
+const activeCells: Balloon[][] = []
+const availableCells: Balloon[][] = []
 
-function applyFloat(balloon: Balloon, dt: number): void {
-    if (balloon.pointerId !== null || balloon.popped) {
-        return
-    }
-
-    balloon.vx +=
-        (Math.random() - 0.5) *
-        FLOAT_FORCE *
-        dt
-
-    balloon.vy +=
-        (Math.random() - 0.5) *
-        FLOAT_FORCE *
-        dt
+function clampVelocity(balloon: Balloon): void {
+    const sq = balloon.vx * balloon.vx + balloon.vy * balloon.vy
+    if (sq <= MAX_SPEED * MAX_SPEED) return
+    const scale = MAX_SPEED / Math.sqrt(sq)
+    balloon.vx *= scale
+    balloon.vy *= scale
 }
 
-export function popWithForce(
-    balloons: Balloon[],
-    popped: Balloon
-): void {
+function clampSpin(balloon: Balloon): void {
+    balloon.angularVelocity = Math.max(
+        -MAX_ANGULAR_SPEED,
+        Math.min(MAX_ANGULAR_SPEED, balloon.angularVelocity)
+    )
+}
+
+export function popWithForce(balloons: Balloon[], popped: Balloon): void {
+    if (popped.popped) return
     popBalloon(popped)
     playPopSound()
 
-    const effectRadius =
-        popped.radius *
-        POP_RADIUS_MULTIPLIER
-
+    const range = popped.radius * POP_RADIUS_MULTIPLIER
+    const rangeSq = range * range
     for (const balloon of balloons) {
-        if (
-            balloon === popped ||
-            balloon.popped ||
-            balloon.pointerId !== null
-        ) {
-            continue
-        }
+        if (balloon === popped || balloon.popped || balloon.pointerId !== null) continue
+        const dx = balloon.x - popped.x
+        const dy = balloon.y - popped.y
+        const sq = dx * dx + dy * dy
+        if (sq < 0.0001 || sq > rangeSq) continue
 
-        const dx =
-            balloon.x - popped.x
-
-        const dy =
-            balloon.y - popped.y
-
-        const distance =
-            Math.hypot(dx, dy)
-
-        if (
-            distance <= 0 ||
-            distance > effectRadius
-        ) {
-            continue
-        }
-
-        const nx = dx / distance
-        const ny = dy / distance
-
-        // Strong near the popped balloon,
-        // smoothly declining farther away.
-        const falloff =
-            1 - distance / effectRadius
-
-        const force =
-            POP_IMPULSE *
-            falloff *
-            falloff
-
-        const deviation =
-            (Math.random() - 0.5) * 0.3
-
-        const cos = Math.cos(deviation)
-        const sin = Math.sin(deviation)
-
-        const pushX =
-            nx * cos - ny * sin
-
-        const pushY =
-            nx * sin + ny * cos
-
-        balloon.vx += pushX * force
-        balloon.vy += pushY * force
-
-        // Imperfection gives it some rotational life.
-        balloon.angularVelocity +=
-            (Math.random() - 0.5) *
-            force *
-            ROTATION_TRANSFER
-
+        const distance = Math.sqrt(sq)
+        const falloff = 1 - distance / range
+        const impulse = POP_IMPULSE * falloff * falloff
+        const offset = (Math.random() - 0.5) * 0.3
+        const direction = Math.atan2(dy, dx) + offset
+        balloon.vx += Math.cos(direction) * impulse
+        balloon.vy += Math.sin(direction) * impulse
+        balloon.angularVelocity += (Math.random() - 0.5) * impulse * ROTATION_TRANSFER
         clampVelocity(balloon)
-        clampAngularVelocity(balloon)
+        clampSpin(balloon)
     }
 }
 
@@ -124,385 +77,225 @@ export function updateBalloonPhysics(
     height: number,
     config: BalloonConfig
 ): void {
-    for (const balloon of balloons) {
-        if (balloon.popped) {
-            continue
-        }
+    if (dt <= 0) return
+    ambientTime += dt
 
-        integrate(balloon, dt)
+    for (const balloon of balloons) {
+        if (balloon.popped) continue
+        integrate(balloon, dt, config)
         resolveScreenCollision(balloon, width, height)
     }
 
     resolveBalloonCollisions(balloons, config)
+
+    // Pairwise positional corrections can move objects beyond the screen.
+    for (const balloon of balloons) {
+        if (!balloon.popped) resolveScreenCollision(balloon, width, height)
+    }
 }
 
-function integrate(
-    balloon: Balloon,
-    dt: number
-): void {
-    // Pointer-controlled balloons are kinematic.
+function integrate(balloon: Balloon, dt: number, config: BalloonConfig): void {
     if (balloon.pointerId !== null) {
+        // Follow the pointer smoothly, without creating accumulated velocity.
+        const follow = 1 - Math.exp(-config.anchorStrength * dt)
+        balloon.x += (balloon.anchorX - balloon.x) * follow
+        balloon.y += (balloon.anchorY - balloon.y) * follow
         balloon.vx = 0
         balloon.vy = 0
-
-        balloon.angularVelocity *= Math.pow(
-            ANGULAR_DAMPING,
-            dt * 60
-        )
-
+        balloon.angularVelocity *= Math.exp(-ANGULAR_DRAG * dt)
         balloon.angle += balloon.angularVelocity * dt
         return
     }
 
-    applyFloat(balloon, dt)
+    const t = ambientTime
+    // Stable per-balloon phase derived from its initial anchor coordinates.
+    const phase = balloon.anchorX * 0.013 + balloon.anchorY * 0.019
+    const gx = Math.sin(t * 0.23) * AMBIENT_GRAVITY
+    const gy = Math.cos(t * 0.17) * AMBIENT_GRAVITY - AMBIENT_BUOYANCY
+    const driftX = Math.sin(t * 0.71 + phase) * AMBIENT_DRIFT
+    const driftY = Math.cos(t * 0.53 + phase * 1.7) * AMBIENT_DRIFT
+
+    balloon.vx += (gx + driftX) * dt
+    balloon.vy += (gy + driftY) * dt
+
+    // Gradually steer perpendicular to the direction of travel
+    const speed = Math.hypot(balloon.vx, balloon.vy)
+
+    if (speed > 1) {
+        const curve =
+            Math.sin(t * AMBIENT_CURVE_FREQUENCY + phase) *
+            AMBIENT_CURVE
+
+        const angle = curve * dt
+        const cos = Math.cos(angle)
+        const sin = Math.sin(angle)
+
+        const vx = balloon.vx
+        const vy = balloon.vy
+
+        balloon.vx = vx * cos - vy * sin
+        balloon.vy = vx * sin + vy * cos
+    }
+
+    balloon.vx *= Math.exp(-LINEAR_DRAG * dt)
+    balloon.vy *= Math.exp(-LINEAR_DRAG * dt)
+    clampVelocity(balloon)
+
     balloon.x += balloon.vx * dt
     balloon.y += balloon.vy * dt
 
+    balloon.angularVelocity += Math.sin(t * 0.61 + phase) * AMBIENT_SPIN * dt
+    balloon.angularVelocity *= Math.exp(-ANGULAR_DRAG * dt)
+    clampSpin(balloon)
     balloon.angle += balloon.angularVelocity * dt
-
-    const velocityDamping =
-        Math.pow(VELOCITY_DAMPING, dt * 60)
-
-    const angularDamping =
-        Math.pow(ANGULAR_DAMPING, dt * 60)
-
-    balloon.vx *= velocityDamping
-    balloon.vy *= velocityDamping
-
-    balloon.angularVelocity *= angularDamping
-
-    const speedSq =
-        balloon.vx * balloon.vx +
-        balloon.vy * balloon.vy
-
-    if (speedSq < 0.0001) {
-        balloon.vx = 0
-        balloon.vy = 0
-    }
-
-    if (
-        Math.abs(balloon.angularVelocity) <
-        MIN_ANGULAR_SPEED
-    ) {
-        balloon.angularVelocity = 0
-    }
-
-    clampVelocity(balloon)
 }
 
-function resolveScreenCollision(
-    balloon: Balloon,
-    width: number,
-    height: number
-): void {
-    const rx = balloon.radius * 0.8
-    const ry = balloon.radius
+function resolveScreenCollision(balloon: Balloon, width: number, height: number): void {
+    // Conservative circular bound that includes the knot and rotation.
+    const r = balloon.radius * 1.17
+    const minX = Math.min(r, width * 0.5)
+    const maxX = Math.max(minX, width - r)
+    const minY = Math.min(r, height * 0.5)
+    const maxY = Math.max(minY, height - r)
 
-    let hitX = false
-    let hitY = false
-
-    if (balloon.x - rx < 0) {
-        balloon.x = rx
-
-        if (balloon.vx < 0) {
-            balloon.vx = -balloon.vx
-            hitX = true
-        }
-    } else if (balloon.x + rx > width) {
-        balloon.x = width - rx
-
-        if (balloon.vx > 0) {
-            balloon.vx = -balloon.vx
-            hitX = true
-        }
+    if (balloon.x < minX) {
+        balloon.x = minX
+        if (balloon.vx < 0) balloon.vx = -balloon.vx * WALL_RETENTION
+    } else if (balloon.x > maxX) {
+        balloon.x = maxX
+        if (balloon.vx > 0) balloon.vx = -balloon.vx * WALL_RETENTION
     }
-
-    if (balloon.y - ry < 0) {
-        balloon.y = ry
-
-        if (balloon.vy < 0) {
-            balloon.vy = -balloon.vy
-            hitY = true
-        }
-    } else if (balloon.y + ry > height) {
-        balloon.y = height - ry
-
-        if (balloon.vy > 0) {
-            balloon.vy = -balloon.vy
-            hitY = true
-        }
+    if (balloon.y < minY) {
+        balloon.y = minY
+        if (balloon.vy < 0) balloon.vy = -balloon.vy * WALL_RETENTION
+    } else if (balloon.y > maxY) {
+        balloon.y = maxY
+        if (balloon.vy > 0) balloon.vy = -balloon.vy * WALL_RETENTION
     }
-
-    if (!hitX && !hitY) {
-        return
-    }
-
-    balloon.vx *= WALL_RETENTION
-    balloon.vy *= WALL_RETENTION
-
-    // Glancing wall impacts induce some rotation.
-    if (hitX) {
-        balloon.angularVelocity +=
-            balloon.vy * ROTATION_TRANSFER
-    }
-
-    if (hitY) {
-        balloon.angularVelocity -=
-            balloon.vx * ROTATION_TRANSFER
-    }
-
-    clampAngularVelocity(balloon)
 }
 
 export function resolveBalloonCollisions(
     balloons: Balloon[],
     config: BalloonConfig
 ): void {
-    for (let i = 0; i < balloons.length; i++) {
-        const a = balloons[i]
+    let maxRadius = 0
+    for (const balloon of balloons) {
+        if (!balloon.popped && balloon.radius > maxRadius) maxRadius = balloon.radius
+    }
+    if (maxRadius === 0) return
 
-        if (a.popped) {
-            continue
+    // With this cell size, colliding circle centers can differ by at most
+    // one cell in either direction. Each pair is tested exactly once.
+    const cellSize = Math.max(24, maxRadius * 1.6 + config.collisionPadding)
+    const columns = Math.max(1, Math.ceil(100000 / cellSize))
+    for (const cell of activeCells) {
+        cell.length = 0
+        availableCells.push(cell)
+    }
+    activeCells.length = 0
+    cells.clear()
+
+    for (const balloon of balloons) {
+        if (balloon.popped) continue
+        const cx = Math.floor(balloon.x / cellSize)
+        const cy = Math.floor(balloon.y / cellSize)
+        const key = cy * columns + cx
+        let cell = cells.get(key)
+        if (!cell) {
+            cell = availableCells.pop() || []
+            cells.set(key, cell)
+            activeCells.push(cell)
         }
+        cell.push(balloon)
+    }
 
-        for (let j = i + 1; j < balloons.length; j++) {
-            const b = balloons[j]
-
-            if (b.popped) {
-                continue
+    // Only search the same cell and four forward neighbors.
+    const offsets = [0, 1, columns - 1, columns, columns + 1]
+    for (const [key, cell] of cells) {
+        for (let k = 0; k < offsets.length; k++) {
+            const other = cells.get(key + offsets[k])
+            if (!other) continue
+            for (let i = 0; i < cell.length; i++) {
+                const start = k === 0 ? i + 1 : 0
+                for (let j = start; j < other.length; j++) {
+                    resolveCollision(cell[i], other[j], config)
+                }
             }
-
-            resolveCollision(a, b, config)
         }
     }
 }
 
-function resolveCollision(
-    a: Balloon,
-    b: Balloon,
-    config: BalloonConfig
-): void {
+function resolveCollision(a: Balloon, b: Balloon, config: BalloonConfig): void {
     let dx = b.x - a.x
     let dy = b.y - a.y
+    let distSq = dx * dx + dy * dy
+    const minDistance = (a.radius + b.radius) * 0.8 + config.collisionPadding
+    if (distSq >= minDistance * minDistance) return
 
-    let distanceSq = dx * dx + dy * dy
-
-    const radiusA = a.radius * 0.8
-    const radiusB = b.radius * 0.8
-
-    const minDistance =
-        radiusA +
-        radiusB +
-        config.collisionPadding
-
-    if (distanceSq >= minDistance * minDistance) {
-        return
-    }
-
-    if (distanceSq < 0.0001) {
+    if (distSq < 0.000001) {
         dx = 1
         dy = 0
-        distanceSq = 1
+        distSq = 1
     }
-
-    const distance = Math.sqrt(distanceSq)
-
+    const distance = Math.sqrt(distSq)
     const nx = dx / distance
     const ny = dy / distance
+    const penetration = Math.max(0, minDistance - distance)
+    const ac = a.pointerId !== null
+    const bc = b.pointerId !== null
 
-    const penetration = minDistance - distance
-
-    const aControlled = a.pointerId !== null
-    const bControlled = b.pointerId !== null
-
-    /*
-     * Positional correction.
-     *
-     * A controlled balloon does not get pushed away from
-     * the user's pointer.
-     */
-    if (aControlled && !bControlled) {
+    if (ac && bc) return
+    if (ac) {
         b.x += nx * penetration
         b.y += ny * penetration
-    } else if (bControlled && !aControlled) {
+        pushFromControlledBalloon(b, nx, ny, penetration)
+        return
+    }
+    if (bc) {
         a.x -= nx * penetration
         a.y -= ny * penetration
-    } else if (!aControlled && !bControlled) {
-        const correction = penetration * 0.5
-
-        a.x -= nx * correction
-        a.y -= ny * correction
-
-        b.x += nx * correction
-        b.y += ny * correction
-    }
-
-    /*
-     * Growing/controlled balloons act as pushers.
-     *
-     * Penetration generates velocity away from the growing
-     * balloon instead of merely teleporting its neighbor.
-     */
-    if (aControlled && !bControlled) {
-        pushFromControlledBalloon(
-            a,
-            b,
-            nx,
-            ny,
-            penetration
-        )
-
+        pushFromControlledBalloon(a, -nx, -ny, penetration)
         return
     }
 
-    if (bControlled && !aControlled) {
-        pushFromControlledBalloon(
-            b,
-            a,
-            -nx,
-            -ny,
-            penetration
-        )
-
-        return
-    }
-
-    if (aControlled && bControlled) {
-        return
-    }
+    const correction = penetration * 0.5
+    a.x -= nx * correction
+    a.y -= ny * correction
+    b.x += nx * correction
+    b.y += ny * correction
 
     const rvx = b.vx - a.vx
     const rvy = b.vy - a.vy
+    const normalSpeed = rvx * nx + rvy * ny
+    if (normalSpeed >= 0) return
 
-    const separatingVelocity =
-        rvx * nx +
-        rvy * ny
+    const impulse = -(1 + config.collisionRestitution) * normalSpeed * 0.5
+    a.vx -= nx * impulse
+    a.vy -= ny * impulse
+    b.vx += nx * impulse
+    b.vy += ny * impulse
 
-    if (separatingVelocity >= 0) {
-        return
-    }
-
-    const speedA =
-        Math.hypot(a.vx, a.vy)
-
-    const speedB =
-        Math.hypot(b.vx, b.vy)
-
-    const impulse =
-        -(1 + BALLON_RESTITUTION) *
-        separatingVelocity *
-        0.5
-
-    const impulseX = nx * impulse
-    const impulseY = ny * impulse
-
-    a.vx -= impulseX
-    a.vy -= impulseY
-
-    b.vx += impulseX
-    b.vy += impulseY
-
-    /*
-     * If one balloon was basically stationary, the incoming
-     * balloon loses approximately 30% of its velocity.
-     */
-    // if (speedA < MIN_SPEED && speedB >= MIN_SPEED) {
-    //     b.vx *= COLLISION_SPEED_RETENTION
-    //     b.vy *= COLLISION_SPEED_RETENTION
-    // }
-
-    // if (speedB < MIN_SPEED && speedA >= MIN_SPEED) {
-    //     a.vx *= COLLISION_SPEED_RETENTION
-    //     a.vy *= COLLISION_SPEED_RETENTION
-    // }
-
-    /*
-     * Tangential relative velocity creates spin.
-     *
-     * tangent = perpendicular to collision normal
-     */
-    const tx = -ny
-    const ty = nx
-
-    const tangentialVelocity =
-        rvx * tx +
-        rvy * ty
-
-    const spin =
-        tangentialVelocity *
-        ROTATION_TRANSFER
-
+    const tangentialSpeed = -rvx * ny + rvy * nx
+    const spin = tangentialSpeed * ROTATION_TRANSFER
     a.angularVelocity += spin
     b.angularVelocity -= spin
-
     clampVelocity(a)
     clampVelocity(b)
-
-    clampAngularVelocity(a)
-    clampAngularVelocity(b)
+    clampSpin(a)
+    clampSpin(b)
 }
 
 function pushFromControlledBalloon(
-    source: Balloon,
     target: Balloon,
     nx: number,
     ny: number,
     penetration: number
 ): void {
-    const impulse =
-        PUSH_BASE_IMPULSE +
-        penetration * PUSH_PENETRATION_IMPULSE
-
+    // Restrict the impulse to keep crowded systems stable.
+    const impulse = Math.min(100, PUSH_BASE_IMPULSE + penetration * PUSH_PENETRATION_IMPULSE)
     target.vx += nx * impulse
     target.vy += ny * impulse
-
-    const tangentX = -ny
-    const tangentY = nx
-
-    const tangent =
-        (Math.random() - 0.5) *
-        impulse *
-        0.08
-
-    target.vx += tangentX * tangent
-    target.vy += tangentY * tangent
-
-    target.angularVelocity +=
-        tangent * ROTATION_TRANSFER
-
+    target.angularVelocity += (-ny * target.vx + nx * target.vy) * ROTATION_TRANSFER
     clampVelocity(target)
-    clampAngularVelocity(target)
-}
-
-function clampVelocity(
-    balloon: Balloon
-): void {
-    const speed =
-        Math.hypot(
-            balloon.vx,
-            balloon.vy
-        )
-
-    if (speed <= MAX_SPEED) {
-        return
-    }
-
-    const scale =
-        MAX_SPEED / speed
-
-    balloon.vx *= scale
-    balloon.vy *= scale
-}
-
-function clampAngularVelocity(
-    balloon: Balloon
-): void {
-    balloon.angularVelocity =
-        Math.max(
-            -MAX_ANGULAR_SPEED,
-            Math.min(
-                MAX_ANGULAR_SPEED,
-                balloon.angularVelocity
-            )
-        )
+    clampSpin(target)
 }
