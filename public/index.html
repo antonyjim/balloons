@@ -1,12 +1,19 @@
-
 <!doctype html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <link rel="manifest" href="/manifest.webmanifest">
 
+    <meta name="theme-color" content="#b8dcf5">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Balloons">
+
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="icon" href="/favicon.ico">
     <title>Balloons</title>
 
     <style>
@@ -20,19 +27,21 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            font-family: system-ui, -apple-system, sans-serif;
+            overscroll-behavior: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
         canvas {
             display: block;
+            width: 100%;
+            height: 100%;
             touch-action: none;
-
             -webkit-user-select: none;
-            user-select: none;
-
-            -webkit-touch-callout: none;
-            -webkit-tap-highlight-color: transparent;
         }
+
         .overlay {
             position: fixed;
             top: 16px;
@@ -41,7 +50,7 @@
             align-items: stretch;
             gap: 10px;
             z-index: 10;
-            pointer-events: none;
+            /* pointer-events: none; */
             user-select: none;
         }
 
@@ -136,6 +145,28 @@
             outline-offset: 3px;
         }
 
+        .draw-button {
+            display: grid;
+            place-items: center;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.85);
+            color: #7657ec;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+            text-decoration: none;
+        }
+
+        .draw-button svg {
+            width: 22px;
+            height: 22px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
         @media (max-width: 480px) {
             .overlay {
                 top: 10px;
@@ -166,20 +197,20 @@
 
         <div class="card reset-card">
             <button id="reset" type="button">
-                <svg width="16" height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M3 12a9 9 0 1 0 3-6.7" />
                     <path d="M3 3v6h6" />
                 </svg>
                 Reset
             </button>
         </div>
+        <a class="draw-button" href="https://sketchpad.anthonyjund.com" aria-label="Open drawing canvas">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 19l-7 2 2-7L17 4a2.8 2.8 0 0 1 4 4L12 19Z" />
+                <path d="m15 6 3 3" />
+            </svg>
+        </a>
     </div>
 
     <script src="/app.js"></script>

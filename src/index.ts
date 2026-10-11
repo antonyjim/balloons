@@ -30,6 +30,13 @@ const ctx = requireContext(canvas)
 
 const isMobile = window.matchMedia('(pointer: coarse)').matches
 
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .catch(console.error)
+    })
+}
+
 const balloonConfig: BalloonConfig = {
     ...defaultBalloonConfig,
     growthRate: isMobile ? 45 : 80,
