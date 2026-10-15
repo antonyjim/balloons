@@ -1,25 +1,32 @@
 import { playPopSound } from './audio'
 import { Balloon, BalloonConfig, popBalloon } from './balloon'
+import { getDeviceTilt, updateDeviceMotion } from './deviceMotion'
 
-const MAX_SPEED = 850
+const MAX_SPEED = 2000
 const MAX_ANGULAR_SPEED = 2.5
 const ROTATION_TRANSFER = 0.0015
 const WALL_RETENTION = 0.78
 const POP_RADIUS_MULTIPLIER = 4
-const POP_IMPULSE = 500
+const POP_IMPULSE = 5000
 const PUSH_BASE_IMPULSE = 45
 const PUSH_PENETRATION_IMPULSE = 2
 
 export const RELEASE_IMPULSE = 525
 // Smooth, low-frequency atmospheric acceleration (pixels/second squared).
-const AMBIENT_GRAVITY = 15
-const AMBIENT_BUOYANCY = 5
-const AMBIENT_DRIFT = 25
-const AMBIENT_SPIN = 0.8
-const AMBIENT_CURVE = 0.7
-const AMBIENT_CURVE_FREQUENCY = 0.45
-const LINEAR_DRAG = 0.65
-const ANGULAR_DRAG = 0.45
+const BUOYANCY = 60
+const BREEZE_FREQUENCY = 0.35
+const TILT_FORCE = 110
+
+const LINEAR_DRAG = 1.8
+const ANGULAR_DRAG = 2.4
+
+const ROCK_STIFFNESS = 2.5
+const ROCK_DAMPING = 3.8
+const ROCK_AMPLITUDE = 0.085
+const ROCK_FREQUENCY = 0.9
+const TILT_LEAN = 0.22
+
+const MAX_LEAN = 0.4
 
 let ambientTime = 0
 
@@ -27,6 +34,29 @@ let ambientTime = 0
 const cells = new Map<number, Balloon[]>()
 const activeCells: Balloon[][] = []
 const availableCells: Balloon[][] = []
+
+let BREEZE_STRENGTH = 22
+
+let breezeTarget = 22
+let breezeTimer = 0
+
+export function updateBreeze(dt: number): void {
+    breezeTimer -= dt
+
+    if (breezeTimer <= 0) {
+        // Random strength and direction
+        breezeTarget = (Math.random() * 5 - 1) * 35
+
+        // Change target every 2–6 seconds
+        breezeTimer = 2 + Math.random() * 4
+    }
+
+    // Smoothly approach target, independent of frame rate
+    const smoothing = 1 - Math.exp(-0.8 * dt)
+
+    BREEZE_STRENGTH +=
+        (breezeTarget - BREEZE_STRENGTH) * smoothing
+}
 
 function clampVelocity(balloon: Balloon): void {
     const sq = balloon.vx * balloon.vx + balloon.vy * balloon.vy
@@ -46,7 +76,7 @@ function clampSpin(balloon: Balloon): void {
 export function popWithForce(balloons: Balloon[], popped: Balloon): void {
     if (popped.popped) return
     popBalloon(popped)
-    
+
 
     const range = popped.radius * POP_RADIUS_MULTIPLIER
     const rangeSq = range * range
@@ -78,7 +108,9 @@ export function updateBalloonPhysics(
     config: BalloonConfig
 ): void {
     if (dt <= 0) return
+
     ambientTime += dt
+    updateDeviceMotion(dt)
 
     for (const balloon of balloons) {
         if (balloon.popped) continue
@@ -94,59 +126,91 @@ export function updateBalloonPhysics(
     }
 }
 
-function integrate(balloon: Balloon, dt: number, config: BalloonConfig): void {
+function integrate(
+    balloon: Balloon,
+    dt: number,
+    config: BalloonConfig
+): void {
     if (balloon.pointerId !== null) {
-        // Follow the pointer smoothly, without creating accumulated velocity.
         const follow = 1 - Math.exp(-config.anchorStrength * dt)
+
         balloon.x += (balloon.anchorX - balloon.x) * follow
         balloon.y += (balloon.anchorY - balloon.y) * follow
+
         balloon.vx = 0
         balloon.vy = 0
+
         balloon.angularVelocity *= Math.exp(-ANGULAR_DRAG * dt)
         balloon.angle += balloon.angularVelocity * dt
+
         return
     }
 
     const t = ambientTime
-    // Stable per-balloon phase derived from its initial anchor coordinates.
-    const phase = balloon.anchorX * 0.013 + balloon.anchorY * 0.019
-    const gx = Math.sin(t * 0.23) * AMBIENT_GRAVITY
-    const gy = Math.cos(t * 0.17) * AMBIENT_GRAVITY - AMBIENT_BUOYANCY
-    const driftX = Math.sin(t * 0.71 + phase) * AMBIENT_DRIFT
-    const driftY = Math.cos(t * 0.53 + phase * 1.7) * AMBIENT_DRIFT
 
-    balloon.vx += (gx + driftX) * dt
-    balloon.vy += (gy + driftY) * dt
+    const phase =
+        balloon.anchorX * 0.013 +
+        balloon.anchorY * 0.019
 
-    // Gradually steer perpendicular to the direction of travel
-    const speed = Math.hypot(balloon.vx, balloon.vy)
+    const tilt = getDeviceTilt()
 
-    if (speed > 1) {
-        const curve =
-            Math.sin(t * AMBIENT_CURVE_FREQUENCY + phase) *
-            AMBIENT_CURVE
+    // Slowly changing atmospheric movement
+    const breeze =
+        Math.sin(t * BREEZE_FREQUENCY) * BREEZE_STRENGTH +
+        Math.sin(t * 0.19 + 1.7) * BREEZE_STRENGTH * 0.45
 
-        const angle = curve * dt
-        const cos = Math.cos(angle)
-        const sin = Math.sin(angle)
+    // Independent local movement
+    const localBreeze =
+        Math.sin(t * 0.72 + phase) * 13
 
-        const vx = balloon.vx
-        const vy = balloon.vy
+    const ax =
+        breeze +
+        localBreeze +
+        tilt * TILT_FORCE
 
-        balloon.vx = vx * cos - vy * sin
-        balloon.vy = vx * sin + vy * cos
-    }
+    // Consistent upward buoyancy
+    const ay =
+        -BUOYANCY +
+        Math.sin(t * 0.43 + phase) * 7
 
-    balloon.vx *= Math.exp(-LINEAR_DRAG * dt)
-    balloon.vy *= Math.exp(-LINEAR_DRAG * dt)
+    balloon.vx += ax * dt
+    balloon.vy += ay * dt
+
+    const drag = Math.exp(-LINEAR_DRAG * dt)
+
+    balloon.vx *= drag
+    balloon.vy *= drag
+
     clampVelocity(balloon)
 
     balloon.x += balloon.vx * dt
     balloon.y += balloon.vy * dt
 
-    balloon.angularVelocity += Math.sin(t * 0.61 + phase) * AMBIENT_SPIN * dt
-    balloon.angularVelocity *= Math.exp(-ANGULAR_DRAG * dt)
+    // Rocking: slow oscillation and a little influence
+    // from the local breeze and phone orientation.
+    const targetAngle =
+        Math.sin(t * ROCK_FREQUENCY + phase) * ROCK_AMPLITUDE +
+        Math.sin(t * 0.37 + phase * 0.7) * 0.035 +
+        tilt * TILT_LEAN +
+        ax * 0.0006
+
+    const desiredAngle = Math.max(
+        -MAX_LEAN,
+        Math.min(MAX_LEAN, targetAngle)
+    )
+
+    // Damped angular spring.
+    // This pulls the knot back beneath the balloon.
+    const error = desiredAngle - balloon.angle
+
+    const angularAcceleration =
+        error * ROCK_STIFFNESS -
+        balloon.angularVelocity * ROCK_DAMPING
+
+    balloon.angularVelocity += angularAcceleration * dt
+
     clampSpin(balloon)
+
     balloon.angle += balloon.angularVelocity * dt
 }
 
@@ -167,10 +231,18 @@ function resolveScreenCollision(balloon: Balloon, width: number, height: number)
     }
     if (balloon.y < minY) {
         balloon.y = minY
-        if (balloon.vy < 0) balloon.vy = -balloon.vy * WALL_RETENTION
+
+        // Don't bounce off the ceiling.
+        // Buoyancy keeps the balloon pressed against it.
+        if (balloon.vy < 0) {
+            balloon.vy = 0
+        }
     } else if (balloon.y > maxY) {
         balloon.y = maxY
-        if (balloon.vy > 0) balloon.vy = -balloon.vy * WALL_RETENTION
+
+        if (balloon.vy > 0) {
+            balloon.vy = -balloon.vy * WALL_RETENTION
+        }
     }
 }
 

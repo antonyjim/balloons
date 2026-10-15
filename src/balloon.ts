@@ -1,4 +1,6 @@
 import { playPopSound } from "./audio"
+import { popWithForce } from "./physics"
+import { BalloonFinish } from "./theme/types"
 
 export interface Balloon {
     pointerId: number | null
@@ -14,6 +16,8 @@ export interface Balloon {
 
     radius: number
     color: string
+    panelColors?: string[]
+    finish: BalloonFinish
 
     angle: number
     angularVelocity: number
@@ -37,6 +41,7 @@ export interface BalloonConfig {
     collisionPadding: number
 }
 
+
 export const defaultBalloonConfig: BalloonConfig = {
     initialRadius: 35,
     growthRate: 80,
@@ -48,7 +53,7 @@ export const defaultBalloonConfig: BalloonConfig = {
     damping: 5,
     anchorStrength: 20,
     collisionRestitution: 0.15,
-    collisionPadding: 2
+    collisionPadding: 3
 }
 
 export function updateBalloon(
@@ -56,7 +61,8 @@ export function updateBalloon(
     dt: number,
     viewportWidth: number,
     viewportHeight: number,
-    config: BalloonConfig
+    config: BalloonConfig,
+    balloons: Balloon[]
 ): void {
     if (balloon.popped) {
         balloon.popTime += dt
@@ -76,9 +82,10 @@ export function updateBalloon(
             balloon.radius = maxRadius
 
             if (config.popAtMax) {
-                balloon.growing = false
-                balloon.popped = true
-                balloon.popTime = 0
+                // balloon.growing = false
+                // balloon.popped = true
+                // balloon.popTime = 0
+                popWithForce(balloons, balloon)
                 return
             }
         }
@@ -117,7 +124,8 @@ export function drawBalloon(
         Math.ceil(balloon.radius / SPRITE_BUCKET) * SPRITE_BUCKET
     )
 
-    const key = `${balloon.color}:${radius}`
+    const finish = balloon.finish ?? 'latex'
+    const key = `${finish}:${balloon.color}:${radius}`
 
     let sprite = spriteCache.get(key)
 
@@ -143,10 +151,17 @@ export function drawBalloon(
 
 function createBalloonSprite(balloon: Balloon, radius: number): BalloonSprite {
     // Margin includes the knot and antialiased stroke.
-    const left = -radius * 1.05
-    const top = -radius * 1.1
-    const width = radius * 2.1
-    const height = radius * 2.4
+    const finish = balloon.finish ?? 'latex'
+
+    const left = -radius * 1.15
+    const top = -radius * 1.15
+    const width = radius * 2.3
+
+    const height = radius * (
+        finish === 'hot-air' ? 3.1 :
+            finish === 'bubble' ? 2.3 :
+                2.4
+    )
 
     const canvas = document.createElement('canvas')
     canvas.width = Math.ceil(width * SPRITE_SCALE)
@@ -174,6 +189,24 @@ function createBalloonSprite(balloon: Balloon, radius: number): BalloonSprite {
 }
 
 function drawBalloonVector(
+    ctx: CanvasRenderingContext2D,
+    balloon: Balloon
+): void {
+    switch (balloon.finish ?? 'latex') {
+        case 'hot-air':
+            drawHotAirVector(ctx, balloon)
+            break
+
+        case 'bubble':
+            drawBubbleVector(ctx, balloon)
+            break
+
+        default:
+            drawLatexVector(ctx, balloon)
+    }
+}
+
+function drawLatexVector(
     ctx: CanvasRenderingContext2D,
     balloon: Balloon
 ): void {
@@ -427,6 +460,298 @@ function drawBalloonVector(
     ctx.strokeStyle = rgba(rgb, 0.9)
     ctx.lineWidth = Math.max(1, r * 0.025)
     ctx.stroke(knot)
+
+    ctx.restore()
+}
+
+function drawBubbleVector(
+    ctx: CanvasRenderingContext2D,
+    balloon: Balloon
+): void {
+    const r = balloon.radius
+
+    ctx.save()
+
+    const base = ctx.createRadialGradient(
+        -r * 0.3, -r * 0.35, 0,
+        0, 0, r
+    )
+
+    base.addColorStop(0, 'rgba(255,255,255,0.02)')
+    base.addColorStop(0.65, 'rgba(180,225,255,0.05)')
+    base.addColorStop(0.88, 'rgba(130,160,255,0.12)')
+    base.addColorStop(1, 'rgba(255,140,210,0.35)')
+
+    ctx.beginPath()
+    ctx.arc(0, 0, r, 0, Math.PI * 2)
+
+    ctx.fillStyle = base
+    ctx.fill()
+
+    const rim = ctx.createLinearGradient(
+        -r, -r, r, r
+    )
+
+    rim.addColorStop(0, 'rgba(110,220,255,0.8)')
+    rim.addColorStop(0.3, 'rgba(210,150,255,0.65)')
+    rim.addColorStop(0.6, 'rgba(255,160,190,0.7)')
+    rim.addColorStop(1, 'rgba(120,255,220,0.65)')
+
+    ctx.strokeStyle = rim
+    ctx.lineWidth = Math.max(1.5, r * 0.035)
+    ctx.stroke()
+
+    // Upper-left specular highlight
+    ctx.beginPath()
+    ctx.ellipse(
+        -r * 0.38,
+        -r * 0.43,
+        r * 0.10,
+        r * 0.30,
+        Math.PI / 4,
+        0,
+        Math.PI * 2
+    )
+
+    ctx.fillStyle = 'rgba(255,255,255,0.55)'
+    ctx.fill()
+
+    // Lower reflection
+    ctx.beginPath()
+    ctx.arc(
+        0, 0,
+        r * 0.82,
+        Math.PI * 0.18,
+        Math.PI * 0.43
+    )
+
+    ctx.strokeStyle = 'rgba(220,250,255,0.45)'
+    ctx.lineWidth = r * 0.045
+    ctx.stroke()
+
+    ctx.restore()
+}
+
+function drawHotAirVector(
+    ctx: CanvasRenderingContext2D,
+    balloon: Balloon
+): void {
+    const r = balloon.radius
+    const w = r * 0.82
+
+    ctx.save()
+    ctx.translate(balloon.x, balloon.y)
+    ctx.rotate(balloon.angle)
+
+    // --------------------------------------------------
+    // Envelope
+    // --------------------------------------------------
+
+    const envelope = new Path2D()
+
+    envelope.moveTo(0, -r)
+
+    envelope.bezierCurveTo(
+        w * 0.95, -r,
+        w * 1.18, -r * 0.18,
+        w * 0.92, r * 0.34
+    )
+
+    envelope.bezierCurveTo(
+        w * 0.72, r * 0.70,
+        w * 0.40, r * 0.92,
+        w * 0.20, r * 1.02
+    )
+
+    envelope.lineTo(-w * 0.20, r * 1.02)
+
+    envelope.bezierCurveTo(
+        -w * 0.40, r * 0.92,
+        -w * 0.72, r * 0.70,
+        -w * 0.92, r * 0.34
+    )
+
+    envelope.bezierCurveTo(
+        -w * 1.18, -r * 0.18,
+        -w * 0.95, -r,
+        0, -r
+    )
+
+    envelope.closePath()
+
+    ctx.save()
+    ctx.clip(envelope)
+
+    ctx.fillStyle = balloon.color
+    ctx.fillRect(-r * 1.2, -r * 1.1, r * 2.4, r * 2.4)
+
+    const panelColors = balloon.panelColors ?? [
+        '#e85d5d',
+        '#f2c14e',
+        '#5ab1ef',
+        '#7acb88',
+        '#b57de8',
+        '#f59e6e'
+    ]
+
+    for (let i = 0; i < panelColors.length; i++) {
+        const t0 = i / panelColors.length
+        const t1 = (i + 1) / panelColors.length
+
+        const x0 = -w * 0.92 + t0 * w * 1.84
+        const x1 = -w * 0.92 + t1 * w * 1.84
+
+        ctx.beginPath()
+        ctx.moveTo(x0 * 0.25, -r)
+        ctx.quadraticCurveTo(x0 * 1.1, -r * 0.1, x0 * 0.38, r * 1.02)
+        ctx.lineTo(x1 * 0.38, r * 1.02)
+        ctx.quadraticCurveTo(x1 * 1.1, -r * 0.1, x1 * 0.25, -r)
+        ctx.closePath()
+
+        ctx.fillStyle = panelColors[i]
+        ctx.fill()
+    }
+
+    const shade = ctx.createLinearGradient(-r, -r * 0.2, r, r * 0.5)
+    shade.addColorStop(0, 'rgba(255,255,255,0.18)')
+    shade.addColorStop(0.45, 'rgba(255,255,255,0.04)')
+    shade.addColorStop(1, 'rgba(0,0,0,0.22)')
+
+    ctx.fillStyle = shade
+    ctx.fillRect(-r * 1.2, -r * 1.1, r * 2.4, r * 2.4)
+
+    ctx.restore()
+
+    ctx.strokeStyle = 'rgba(70, 52, 40, 0.65)'
+    ctx.lineWidth = Math.max(1, r * 0.028)
+    ctx.stroke(envelope)
+
+    // --------------------------------------------------
+    // Throat / skirt
+    // --------------------------------------------------
+
+    const throatTopY = r * 0.98
+    const throatBottomY = r * 1.16
+    const throatHalfTop = w * 0.16
+    const throatHalfBottom = w * 0.11
+
+    const throat = new Path2D()
+    throat.moveTo(-throatHalfTop, throatTopY)
+    throat.lineTo(throatHalfTop, throatTopY)
+    throat.lineTo(throatHalfBottom, throatBottomY)
+    throat.lineTo(-throatHalfBottom, throatBottomY)
+    throat.closePath()
+
+    const throatGradient = ctx.createLinearGradient(
+        0, throatTopY,
+        0, throatBottomY
+    )
+
+    throatGradient.addColorStop(0, '#6a4d32')
+    throatGradient.addColorStop(1, '#2c2119')
+
+    ctx.fillStyle = throatGradient
+    ctx.fill(throat)
+
+    ctx.strokeStyle = 'rgba(30, 20, 10, 0.65)'
+    ctx.lineWidth = Math.max(1, r * 0.018)
+    ctx.stroke(throat)
+
+    // --------------------------------------------------
+    // Suspension ropes
+    // --------------------------------------------------
+
+    const basketTopY = r * 1.65
+    const basketWidth = r * 0.52
+    const basketHeight = r * 0.34
+
+    const basketLeft = -basketWidth / 2
+    const basketRight = basketWidth / 2
+
+    const ropeTopPoints = [
+        [-w * 0.18, throatBottomY],
+        [-w * 0.07, throatBottomY],
+        [w * 0.07, throatBottomY],
+        [w * 0.18, throatBottomY]
+    ]
+
+    const ropeBottomPoints = [
+        [basketLeft * 0.92, basketTopY],
+        [basketLeft * 0.28, basketTopY],
+        [basketRight * 0.28, basketTopY],
+        [basketRight * 0.92, basketTopY]
+    ]
+
+    ctx.strokeStyle = '#5a4736'
+    ctx.lineWidth = Math.max(1, r * 0.014)
+    ctx.lineCap = 'round'
+
+    for (let i = 0; i < ropeTopPoints.length; i++) {
+        const [x1, y1] = ropeTopPoints[i]
+        const [x2, y2] = ropeBottomPoints[i]
+
+        ctx.beginPath()
+        ctx.moveTo(x1, y1)
+        ctx.lineTo(x2, y2)
+        ctx.stroke()
+    }
+
+    // Optional cross-bracing for stronger “hung basket” feel
+    ctx.beginPath()
+    ctx.moveTo(ropeTopPoints[0][0], ropeTopPoints[0][1])
+    ctx.lineTo(ropeBottomPoints[1][0], ropeBottomPoints[1][1])
+    ctx.moveTo(ropeTopPoints[3][0], ropeTopPoints[3][1])
+    ctx.lineTo(ropeBottomPoints[2][0], ropeBottomPoints[2][1])
+    ctx.stroke()
+
+    // --------------------------------------------------
+    // Basket
+    // --------------------------------------------------
+
+    const basket = new Path2D()
+    basket.moveTo(basketLeft, basketTopY)
+    basket.lineTo(basketRight, basketTopY)
+    basket.lineTo(basketRight * 0.82, basketTopY + basketHeight)
+    basket.lineTo(basketLeft * 0.82, basketTopY + basketHeight)
+    basket.closePath()
+
+    const basketGradient = ctx.createLinearGradient(
+        0, basketTopY,
+        0, basketTopY + basketHeight
+    )
+
+    basketGradient.addColorStop(0, '#b57a46')
+    basketGradient.addColorStop(1, '#7b4d2a')
+
+    ctx.fillStyle = basketGradient
+    ctx.fill(basket)
+
+    ctx.strokeStyle = '#5d3d24'
+    ctx.lineWidth = Math.max(1, r * 0.02)
+    ctx.stroke(basket)
+
+    // Wicker detail
+    ctx.strokeStyle = 'rgba(240, 200, 145, 0.42)'
+    ctx.lineWidth = Math.max(0.8, r * 0.012)
+
+    ctx.fillStyle = '#444'
+    ctx.fillRect(-r * 0.06, r * 1.30, r * 0.12, r * 0.05)
+
+    for (let i = 1; i <= 3; i++) {
+        const y = basketTopY + basketHeight * i / 4
+        ctx.beginPath()
+        ctx.moveTo(basketLeft * 0.78, y)
+        ctx.lineTo(basketRight * 0.78, y)
+        ctx.stroke()
+    }
+
+    for (let i = 1; i <= 3; i++) {
+        const x = basketLeft * 0.75 + (basketWidth * 0.50 * i / 4)
+        ctx.beginPath()
+        ctx.moveTo(x, basketTopY + basketHeight * 0.08)
+        ctx.lineTo(x, basketTopY + basketHeight * 0.92)
+        ctx.stroke()
+    }
 
     ctx.restore()
 }

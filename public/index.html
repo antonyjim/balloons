@@ -40,7 +40,24 @@
             height: 100%;
             touch-action: none;
             -webkit-user-select: none;
+            background: transparent
         }
+
+        #background {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        #app {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            background: transparent;
+        }
+
 
         .overlay {
             position: fixed;
@@ -187,11 +204,12 @@
 </head>
 
 <body>
+    <div id="background"></div>
     <canvas id="app"></canvas>
 
     <div class="overlay">
         <div class="card counter-card">
-            <span class="counter-label">Balloons</span>
+            <span class="counter-label" id="counter-label">Balloons</span>
             <span id="counter">0</span>
         </div>
 

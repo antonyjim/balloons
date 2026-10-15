@@ -7,8 +7,12 @@ import {
     popBalloon,
     updateBalloon
 } from './balloon'
-import { popWithForce, RELEASE_IMPULSE, updateBalloonPhysics } from './physics'
+import { popWithForce, RELEASE_IMPULSE, updateBalloonPhysics, updateBreeze } from './physics'
 import { startInflateSound, stopInflateSound } from './audio'
+import { onOrientation } from './deviceMotion'
+import { ThemeManager } from './theme/ThemeManager'
+import { BackgroundRenderer } from './theme/background'
+import { getRandomPanelColors } from './theme/colors'
 
 function requireCanvas(): HTMLCanvasElement {
     const element = document.querySelector<HTMLCanvasElement>('#app')
@@ -17,15 +21,12 @@ function requireCanvas(): HTMLCanvasElement {
 }
 
 function requireContext(element: HTMLCanvasElement): CanvasRenderingContext2D {
-    const context = element.getContext('2d', { alpha: false })
+    const context = element.getContext('2d', { alpha: true })
     if (!context) throw new Error('2D canvas unavailable')
     return context
 }
 
 const canvas = requireCanvas()
-canvas.addEventListener('contextmenu', e => {
-    e.preventDefault()
-})
 const ctx = requireContext(canvas)
 
 const isMobile = window.matchMedia('(pointer: coarse)').matches
@@ -37,18 +38,34 @@ if ('serviceWorker' in navigator) {
     })
 }
 
+canvas.addEventListener('contextmenu', e => {
+    e.preventDefault()
+})
+
 const balloonConfig: BalloonConfig = {
     ...defaultBalloonConfig,
+    initialRadius: isMobile ? 35 : 60,
     growthRate: isMobile ? 45 : 80,
-    maxScreenRatio: isMobile ? 0.65 : 1 / 3
+    maxScreenRatio: isMobile ? 0.65 : 1 / 2.75
 }
 
 const balloons: Balloon[] = []
 const activePointers = new Map<number, Balloon>()
-const counterEl = document.getElementById('counter')
-const background = new Image()
-const backgroundCanvas = document.createElement('canvas')
-const backgroundCtx = backgroundCanvas.getContext('2d')
+const themeManager = new ThemeManager()
+const background = new BackgroundRenderer()
+
+function applyTheme(): void {
+    const theme = themeManager.current
+    const label = document.getElementById("counter-label")
+    
+    if (label) label.innerText = theme.finish == "bubble" ? "BUBBLES" : "BALLOONS"
+
+    void background.setBackground(theme.theme.background)
+}
+
+themeManager.setMode('auto')
+applyTheme()
+themeManager.subscribe(applyTheme)
 
 let width = 0
 let height = 0
@@ -62,56 +79,78 @@ let resetQueue: Balloon[] = []
 let resetElapsed = 0
 let resetting = false
 
-function randomPastelColor(): string {
-    const hue = Math.random() * 360
-    const saturation = 70 + Math.random() * 15
-    const lightness = 70 + Math.random() * 10
-    return `hsl(${hue}, ${saturation}%, ${lightness}%)`
-}
 
-function drawBackground(): void {
-    if (!backgroundCtx) return
-    backgroundCanvas.width = width
-    backgroundCanvas.height = height
-    backgroundCtx.fillStyle = '#cde5f2'
-    backgroundCtx.fillRect(0, 0, width, height)
+const counterEl = document.getElementById('counter')
+counterEl?.addEventListener('click', () => {
+    let enabled = false
+    const Orientation = DeviceOrientationEvent as typeof DeviceOrientationEvent & {
+        requestPermission?: () => Promise<string>
+    }
 
-    if (!background.complete || !background.naturalWidth) return
+    if (typeof Orientation.requestPermission === 'function') {
+        Orientation.requestPermission()
+            .then(permission => {
+                console.log('Orientation permission:', permission)
 
-    const scale = Math.max(
-        width / background.naturalWidth,
-        height / background.naturalHeight
-    )
-    const sourceWidth = width / scale
-    const sourceHeight = height / scale
-    const sourceX = (background.naturalWidth - sourceWidth) * 0.5
-    const sourceY = (background.naturalHeight - sourceHeight) * 0.5
+                if (permission === 'granted') {
+                    enabled = true
+                    window.addEventListener(
+                        'deviceorientation',
+                        onOrientation
+                    )
+                }
+            })
+            .catch(console.error)
+    } else {
+        window.addEventListener(
+            'deviceorientation',
+            onOrientation
+        )
+        enabled = true
+    }
 
-    backgroundCtx.drawImage(
-        background,
-        sourceX,
-        sourceY,
-        sourceWidth,
-        sourceHeight,
-        0,
-        0,
-        width,
-        height
-    )
-}
+    if (!enabled && counterEl) {
+        counterEl.style = "color: red"
+    } else {
+        counterEl.style = "color: green"
+    }
+})
+
+let currentDpr = 0
+let currentPixelWidth = 0
+let currentPixelHeight = 0
 
 function resize(): void {
-    width = window.innerWidth
-    height = window.innerHeight
-    // Avoid expensive 3x/4x pixel buffers on high-density screens.
+    const nextWidth = window.innerWidth
+    const nextHeight = window.innerHeight
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
-    canvas.width = Math.round(width * dpr)
-    canvas.height = Math.round(height * dpr)
+
+    const pixelWidth = Math.round(nextWidth * dpr)
+    const pixelHeight = Math.round(nextHeight * dpr)
+
+    if (
+        pixelWidth === currentPixelWidth &&
+        pixelHeight === currentPixelHeight &&
+        dpr === currentDpr
+    ) {
+        return
+    }
+
+    currentPixelWidth = pixelWidth
+    currentPixelHeight = pixelHeight
+    currentDpr = dpr
+
+    width = nextWidth
+    height = nextHeight
+
+    canvas.width = pixelWidth
+    canvas.height = pixelHeight
+
     canvas.style.width = `${width}px`
     canvas.style.height = `${height}px`
     canvas.style.touchAction = 'none'
+
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    drawBackground()
 }
 
 function reset(): void {
@@ -173,7 +212,11 @@ function update(dt: number): void {
     updateReset(dt)
 
     for (const balloon of balloons) {
-        updateBalloon(balloon, dt, width, height, balloonConfig)
+        updateBalloon(balloon, dt, width, height, {
+            ...balloonConfig,
+            popAtMax: themeManager.current.finish == "bubble"
+        },
+            balloons)
     }
 
     updateBalloonPhysics(balloons, dt, width, height, balloonConfig)
@@ -192,16 +235,25 @@ function update(dt: number): void {
     syncInflateSound()
 }
 
+// function render(): void {
+//     ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+//     for (const balloon of balloons) {
+//         drawBalloon(ctx, balloon)
+//     }
+// }
+
 function render(): void {
-    if (backgroundCanvas.width && backgroundCanvas.height) {
-        ctx.drawImage(backgroundCanvas, 0, 0)
-    } else {
-        ctx.fillStyle = '#cde5f2'
-        ctx.fillRect(0, 0, width, height)
+    ctx.resetTransform()
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    for (const balloon of balloons) {
+        drawBalloon(ctx, balloon)
     }
 
-    for (const balloon of balloons) drawBalloon(ctx, balloon)
+
 }
+
 
 let profileFrames = 0
 let profileUpdate = 0
@@ -215,6 +267,7 @@ function frame(time: number): void {
     lastTime = time
 
     const t0 = performance.now()
+    updateBreeze(dt)
     update(dt)
 
     const t1 = performance.now()
@@ -236,6 +289,8 @@ function frame(time: number): void {
             physicsMs: +(profileUpdate / profileFrames).toFixed(2),
             renderMs: +(profileRender / profileFrames).toFixed(2)
         })
+
+        console.log(balloons)
 
         profileFrames = 0
         profileUpdate = 0
@@ -276,13 +331,16 @@ canvas.addEventListener('pointerdown', event => {
         anchorX: x,
         anchorY: y,
         radius: balloonConfig.initialRadius,
-        color: randomPastelColor(),
+        color: themeManager.randomBalloonColor(),
+        panelColors: getRandomPanelColors(themeManager.current.theme, Math.max(1, Math.floor(Math.random() * 5))),
+        finish: themeManager.current.finish,
         angle: Math.random() * Math.PI * 2,
         angularVelocity: 0,
         growing: true,
         popped: false,
         popTime: 0
     }
+
 
     balloons.push(balloon)
     activePointers.set(event.pointerId, balloon)
@@ -293,10 +351,18 @@ canvas.addEventListener('pointerdown', event => {
 
 canvas.addEventListener('pointermove', event => {
     const balloon = activePointers.get(event.pointerId)
-    if (!balloon || balloon.popped) return
-    const { x, y } = canvasPosition(event)
-    balloon.anchorX = x
-    balloon.anchorY = y
+    try {
+        if (!balloon || balloon.popped) return
+        const { x, y } = canvasPosition(event)
+        balloon.anchorX = x
+        balloon.anchorY = y
+    } catch {
+        if (balloon) {
+            balloon.anchorX = screenX / 2
+            balloon.anchorY = screenY / 2
+        }
+    }
+
 })
 
 function releaseBalloon(pointerId: number): void {
@@ -308,7 +374,7 @@ function releaseBalloon(pointerId: number): void {
 
     if (!balloon.popped) {
         const angle = Math.random() * Math.PI * 2
-        const impulse = Math.max(RELEASE_IMPULSE / 2, RELEASE_IMPULSE * (0.5 + Math.random() * 0.5))
+        const impulse = Math.max(RELEASE_IMPULSE / 2, RELEASE_IMPULSE * (0.9 + Math.random() * 0.5))
         balloon.vx += Math.cos(angle) * impulse
         balloon.vy += Math.sin(angle) * impulse
         balloon.angularVelocity += (Math.random() - 0.5) * 0.5
@@ -329,14 +395,16 @@ function syncInflateSound(): void {
     }
 }
 
+
+
 canvas.addEventListener('pointerup', event => releaseBalloon(event.pointerId))
 canvas.addEventListener('pointercancel', event => releaseBalloon(event.pointerId))
 canvas.addEventListener('lostpointercapture', event => releaseBalloon(event.pointerId))
 
 window.addEventListener('resize', resize)
 document.getElementById('reset')?.addEventListener('click', resetBalloons)
-background.addEventListener('load', drawBackground)
-background.src = '/bg.png'
+// background.addEventListener('load', drawBackground)
+// background.src = '/bg.png'
 resize()
 updateCounter()
 requestAnimationFrame(frame)
