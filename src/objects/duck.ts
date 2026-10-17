@@ -1,3 +1,5 @@
+import { updateApple, constrainApple } from './apple'
+import type { PhysicsOptions } from './physicsOptions'
 import type { Balloon } from './balloonTypes'
 
 const duckColors = ['#ffd44f', '#f582ae', '#76c7ed', '#a695e5', '#81c99a', '#f5a465'] as const
@@ -83,5 +85,55 @@ function drawGoose(ctx: CanvasRenderingContext2D, goose: Balloon): void {
     ctx.arc(r * 0.65, -r * 0.95, r * 0.045, 0, Math.PI * 2)
     ctx.fillStyle = '#352d38'
     ctx.fill()
+    ctx.restore()
+}
+
+export function updateDuck(duck: Balloon, dt: number, width: number, ground: number, physics: Readonly<PhysicsOptions>): void {
+    const flight = duck.duckFlight ??= { age: 0, delay: 30 + Math.random() * 15, flying: false, elapsed: 0, direction: Math.random() < 0.5 ? -1 : 1 }
+    flight.age += dt
+    if (!flight.flying && flight.age >= flight.delay && duck.pointerId === null) {
+        flight.flying = true
+        duck.growing = false
+    }
+    if (!flight.flying || duck.pointerId !== null) {
+        updateApple(duck, dt, width, ground, physics)
+        return
+    }
+    flight.elapsed += dt
+    duck.vx += (flight.direction * 110 - duck.vx) * (1 - Math.exp(-2 * dt))
+    duck.vy += (-180 - duck.vy) * (1 - Math.exp(-2 * dt))
+    duck.x += duck.vx * dt
+    duck.y += duck.vy * dt
+    duck.angle += (flight.direction * -0.12 - duck.angle) * (1 - Math.exp(-4 * dt))
+    constrainDuck(duck, width, ground, physics)
+}
+
+export function constrainDuck(duck: Balloon, width: number, ground: number, physics: Readonly<PhysicsOptions>): void {
+    if (!duck.duckFlight?.flying || duck.pointerId !== null) {
+        constrainApple(duck, width, ground, physics)
+        return
+    }
+    if (duck.y + duck.radius * 1.2 < 0 || duck.x + duck.radius * 1.2 < 0 || duck.x - duck.radius * 1.2 > width) {
+        (duck.apple ??= { exited: false }).exited = true
+    }
+}
+
+/** Animated wing overlay keeps body sprites shared while birds flap away. */
+export function drawDuckFlight(ctx: CanvasRenderingContext2D, duck: Balloon): void {
+    if (!duck.duckFlight?.flying || duck.pointerId !== null) return
+    const r = duck.radius
+    const flap = Math.sin(duck.duckFlight.elapsed * 18)
+    ctx.save()
+    ctx.translate(duck.x, duck.y)
+    ctx.rotate(duck.angle)
+    ctx.beginPath()
+    ctx.moveTo(-r * 0.45, r * 0.2)
+    ctx.quadraticCurveTo(-r * 0.9, -r * (0.4 + flap * 0.7), r * 0.2, -r * (0.3 + flap * 0.7))
+    ctx.quadraticCurveTo(r * 0.1, r * 0.4, -r * 0.45, r * 0.2)
+    ctx.fillStyle = duck.color
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(40,28,38,0.8)'
+    ctx.lineWidth = Math.max(1.3, r * 0.03)
+    ctx.stroke()
     ctx.restore()
 }

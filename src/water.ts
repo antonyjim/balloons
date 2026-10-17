@@ -11,12 +11,16 @@ export function waveHeight(x: number, time: number): number {
 
 export function waterSurface(ground: number, objects: readonly Balloon[]): number | null {
     return objects.some(object => object.finish === 'duck' && !object.popped && !object.apple?.exited)
-        ? Math.max(0, ground - Math.min(220, ground * 0.3)) : null
+        ? Math.max(0, ground - Math.min(165, ground * 0.23)) : null
 }
 
 /** Ducks and apples float; dense fruit sinks through the water to the solid floor. */
 export function applyWater(object: Balloon, surface: number | null, dt: number): void {
-    if (surface === null || object.popped || object.pointerId !== null) return
+    if (object.finish === 'hot-air') {
+        const bottom = object.suspension ? object.suspension.y + object.radius * 0.23 : object.y + object.radius * 1.5
+        object.waterEscape = surface !== null && bottom > surface - 25
+    }
+    if (surface === null || object.popped || object.pointerId !== null || object.duckFlight?.flying) return
     const localSurface = surface + waveHeight(object.x, waveTime)
     const submerged = Math.max(0, Math.min(1, (object.y + object.radius - localSurface) / (object.radius * 2)))
     if (submerged === 0) return

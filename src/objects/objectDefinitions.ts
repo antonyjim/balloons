@@ -1,4 +1,4 @@
-import { drawDuck } from './duck'
+import { drawDuck, updateDuck, constrainDuck } from './duck'
 import { drawApple, appleSpriteRevision, updateApple, constrainApple } from './apple'
 import { materialRevision } from './balloonMaterials'
 import { drawWatermelon, watermelonSpriteRevision, watermelonPhysics, updateWatermelon, constrainWatermelon, smashWatermelon, updateWatermelonChunks, drawWatermelonChunks } from './watermelon'
@@ -33,7 +33,7 @@ const definitions = {
         draw: drawDuck, spriteKey: object => [object.color, object.duckVariant], spriteHeight: 2.4,
         hitRadiusRatio: 1, popAtMax: false,
         physics: { releaseImpulse: 0, collisionRadiusRatio: 0.8, collisionRestitution: 0.25 },
-        updatePhysics: updateApple, constrain: constrainApple
+        updatePhysics: updateDuck, constrain: constrainDuck
     },
     apple: {
         draw: drawApple, spriteRevision: appleSpriteRevision, spriteKey: () => null,

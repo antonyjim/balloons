@@ -24,7 +24,7 @@ function validThemeMode(value: string | null): ThemeMode {
 function validFinishMode(value: string | null): FinishMode {
     return value === 'random' || value === 'latex' || value === 'hot-air' || value === 'bubble' || value === 'paint' || value === 'watermelon' || value === 'apple' || value === 'duck'
         ? value
-        : 'auto'
+        : 'random'
 }
 
 export class ThemeManager {

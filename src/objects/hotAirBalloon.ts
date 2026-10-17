@@ -582,6 +582,10 @@ export function updateHotAirBurner(
     // Use the same padded basket bound as the suspension solver's floor contact.
     const grounded = viewportHeight > 0 && !!basket && !balloon.fire?.detached
         && basket.y + balloon.radius * 0.23 >= viewportHeight - 0.5
+    if (balloon.waterEscape) {
+        if (!burner.active) { burner.active = true; burner.elapsed = 0 }
+        burner.remaining = Math.max(burner.remaining, 0.8)
+    }
     if (grounded && !burner.active) burner.remaining = 0
     burner.remaining -= dt
     burner.elapsed += dt
@@ -606,7 +610,7 @@ export function updateHotAirBurner(
         : 0
     const weight = physics.basketGravity * Math.max(0.01, physics.basketMassRatio)
     return burner.intensity * (Math.max(0, weight - physics.buoyancy)
-        + physics.burnerLift * (1 + Math.max(0.01, physics.basketMassRatio)))
+        + physics.burnerLift * (balloon.waterEscape ? 2.5 : 1) * (1 + Math.max(0.01, physics.basketMassRatio)))
 }
 
 let glowSprite: HTMLCanvasElement | null = null

@@ -19,6 +19,8 @@ test('simple mode excludes watermelon immediately and throughout automatic rotat
     }
     vm.runInNewContext(fs.readFileSync(filename, 'utf8'), context)
     const manager = new module.exports.ThemeManager()
+    assert.equal(manager.current.finishMode, 'random')
+    manager.setFinish('auto')
     assert.equal(manager.current.finish, 'watermelon')
     manager.setSimpleMode(true)
     assert.notEqual(manager.current.finish, 'watermelon')

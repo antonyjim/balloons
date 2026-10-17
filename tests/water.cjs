@@ -4,6 +4,9 @@ const { waterSurface, applyWater } = require('../dist-ts/water')
 const { sceneGround } = require('../dist-ts/sceneGround')
 const { updateBalloonPhysics } = require('../dist-ts/physics')
 const { popBalloon, updateBalloon, defaultBalloonConfig: config } = require('../dist-ts/objects/balloon')
+const { updateDuck } = require('../dist-ts/objects/duck')
+const { getPhysicsOptions } = require('../dist-ts/objects/objectDefinitions')
+const { updateHotAirBurner } = require('../dist-ts/objects/hotAirBalloon')
 function body(finish, x = 300, y = 100) {
     return { finish, x, y, anchorX: x, anchorY: y, radius: 35,
         vx: 0, vy: 0, angle: 0, angularVelocity: 0, pointerId: null,
@@ -12,6 +15,41 @@ function body(finish, x = 300, y = 100) {
 function simulate(objects, seconds = 10) {
     for (let i = 0; i < seconds * 120; i++) updateBalloonPhysics(objects, 1/120, 1000, 728, config)
 }
+test('birds choose a 30–45 second stay and then fly up and out, waiting for release', () => {
+    const duck = body('duck', 400, 500)
+    const physics = getPhysicsOptions(duck)
+    updateDuck(duck, 1/60, 1000, 728, physics)
+    assert.ok(duck.duckFlight.delay >= 30 && duck.duckFlight.delay <= 45)
+    duck.duckFlight.age = duck.duckFlight.delay - 0.1
+    duck.pointerId = 1
+    updateDuck(duck, 0.2, 1000, 728, physics)
+    assert.equal(duck.duckFlight.flying, false)
+    duck.pointerId = null
+    updateDuck(duck, 1/60, 1000, 728, physics)
+    assert.equal(duck.duckFlight.flying, true)
+    const startY = duck.y
+    for (let i = 0; i < 1200 && !duck.apple?.exited; i++) {
+        applyWater(duck, 508, 1/120)
+        updateDuck(duck, 1/120, 1000, 728, physics)
+    }
+    assert.ok(duck.y < startY)
+    assert.equal(duck.apple.exited, true)
+})
+test('a hot-air basket near water triggers sustained escape thrust, even above the usual ignition altitude', () => {
+    const hot = body('hot-air', 400, 100)
+    hot.suspension = { x: 400, y: 510 }
+    applyWater(hot, 508, 1/60)
+    assert.equal(hot.waterEscape, true)
+    const physics = getPhysicsOptions(hot)
+    for (let i = 0; i < 600; i++) updateHotAirBurner(hot, 1/60, physics, 728, () => 0.5)
+    assert.equal(hot.burner.active, true)
+    assert.equal(hot.burner.intensity, 1)
+    const lift = updateHotAirBurner(hot, 1/60, physics, 728)
+    assert.ok(lift > physics.burnerLift * 2)
+    hot.suspension.y = 450
+    applyWater(hot, 508, 1/60)
+    assert.equal(hot.waterEscape, false)
+})
 test('floating birds rock gently as waves pass and held birds stay under pointer control', () => {
     for (const duckVariant of ['duck', 'goose']) {
         const duck = body('duck', 200, 510)

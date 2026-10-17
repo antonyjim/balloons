@@ -1,3 +1,4 @@
+import { drawDuckFlight } from './duck'
 import { drawBurningEnvelope } from './hotAirFire'
 import { bubbleFrame, bubbleRadiusAt } from './bubble'
 import { maximumRadius, availableRadius } from './sizeLimits'
@@ -167,6 +168,7 @@ export function drawBalloon(
     )
     if (finish === 'hot-air') drawHotAirGlow(ctx, balloon)
     ctx.restore()
+    if (finish === 'duck') drawDuckFlight(ctx, balloon)
 }
 
 function createBalloonSprite(balloon: Balloon, radius: number): BalloonSprite {
