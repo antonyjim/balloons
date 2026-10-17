@@ -1,10 +1,10 @@
-export interface PlaySettings { enabled: boolean; timeLimit: number; cooldown: number }
+export interface PlaySettings { enabled: boolean; timeLimit: number; cooldown: number; cooldownApp?: 'matching' | 'sketchpad' }
 export const defaultPlaySettings: PlaySettings = { enabled: false, timeLimit: 5, cooldown: 2 }
 export function parsePlaySettings(value: unknown): PlaySettings {
     const input = value as Partial<PlaySettings> | null
     const minutes = (value: unknown, fallback: number): number =>
         typeof value === 'number' && Number.isFinite(value) && value >= 0.1 && value <= 240 ? value : fallback
-    return { enabled: input?.enabled === true, timeLimit: minutes(input?.timeLimit, 5), cooldown: minutes(input?.cooldown, 2) }
+    return { enabled: input?.enabled === true, timeLimit: minutes(input?.timeLimit, 5), cooldown: minutes(input?.cooldown, 2), ...(input?.cooldownApp === 'matching' ? { cooldownApp: 'matching' as const } : {}) }
 }
 
 /** Wall-clock deadlines keep background tabs from extending a play session. */

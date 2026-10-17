@@ -1,0 +1,44 @@
+:host { display: block; height: 100%; color: #35444d; font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button, a { -webkit-tap-highlight-color: transparent; touch-action: none; }
+button { font: inherit; cursor: pointer; }
+.toy-room { height: 100%; overflow: auto; padding: 18px clamp(12px, 4vw, 70px) max(18px, env(safe-area-inset-bottom)); background: repeating-linear-gradient(90deg, #fff6df 0, #fff6df 46px, #fff1d5 46px, #fff1d5 48px); display: grid; grid-template-rows: auto minmax(340px, 1fr) auto minmax(130px, 20%); gap: 14px; }
+header { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+.brand { display: flex; gap: 12px; align-items: center; }
+.brand-icon { background: #dd6d72; color: white; border-radius: 17px; padding: 17px 10px; transform: rotate(-7deg); font-weight: 900; font-size: 21px; box-shadow: 0 4px 0 #b94955; }
+h1 { margin: 0; font-size: clamp(20px, 3vw, 34px); letter-spacing: -1px; }
+header p { margin: 4px 0 0; color: #8c7f68; font-size: 13px; }
+nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+nav a { color: #41736b; text-decoration: none; padding: 10px 14px; background: #ffffffa8; border: 1px solid #dfd6bc; border-radius: 24px; font-weight: bold; font-size: 13px; }
+.cabinet { padding: 12px 20px 18px; border: 7px solid #438b83; border-bottom-width: 12px; border-radius: 28px 28px 12px 12px; background: #d5ebe0; box-shadow: 0 7px 0 #2f6c65, 0 14px 22px #72583e18; display: flex; flex-direction: column; min-height: 0; }
+.cabinet-top { display: flex; align-items: center; gap: 10px; font-weight: bold; color: #36756e; font-size: 14px; padding: 2px 4px 12px; }
+.cabinet-top > :first-child { color: #e1a935; font-size: 25px; }
+.progress { margin-left: auto; background: #fff8e4; border-radius: 20px; padding: 5px 12px; font-size: 12px; white-space: nowrap; }
+.shelves { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(6, minmax(44px, 1fr)); }
+.slot { position: relative; display: grid; place-items: center; padding: 0 0 15px; min-height: 0; background: linear-gradient(#b8d7c559, #edf5d999); border: 0; color: #8eaa9a; font: 900 clamp(30px, 5vh, 58px)/1 'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif; text-shadow: 0 2px 0 #ffffffa0; }
+.slot::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 13px; border-top: 3px solid #f6d39d; background: #c38d5a; box-shadow: 0 6px 0 #af784c, 0 10px 8px #4b664428; }
+.slot.matched { color: var(--toy-color); text-shadow: 0 3px 0 #ffffff, 0 5px 0 #00000020; animation: match-pop 0.35s ease-out; }
+.slot:focus-visible { outline: 3px dashed #e1a935; outline-offset: -5px; }
+.instruction { text-align: center; font-size: clamp(13px, 1.8vw, 17px); font-weight: bold; color: #77705c; min-height: 22px; }
+.dispenser { position: relative; display: grid; grid-template-columns: 1fr minmax(100px, 1fr) auto; align-items: center; gap: 18px; padding: 15px 28px; border: 4px solid #bd5962; border-radius: 24px; background: #e8898a; box-shadow: inset 0 5px 0 #f6b1a3, 0 6px 0 #a84f5a; }
+.machine-label { font-weight: 900; letter-spacing: 2px; color: #fff8e1; font-size: clamp(12px, 1.6vw, 20px); }
+.machine-label > span { color: #ffe4a0; font-size: 24px; }
+.machine-label small { display: block; margin-top: 9px; letter-spacing: 0; font-size: 12px; font-weight: normal; }
+.tray { height: 100%; min-height: 90px; position: relative; border: 5px solid #c06a71; border-top-color: #a94f59; background: #f7d7ba; border-radius: 15px 15px 30px 30px; box-shadow: inset 0 5px 12px #97515d22; }
+.tray span { position: absolute; bottom: 7px; width: 100%; text-align: center; color: #a57362; font-size: 10px; letter-spacing: 0.5px; }
+.dispense { display: flex; align-items: center; gap: 12px; justify-content: center; min-width: 150px; min-height: 85px; padding: 8px 18px; border: 3px solid #ac7c24; border-radius: 50px; background: #ffe477; color: #795a25; box-shadow: 0 6px 0 #ad7628, inset 0 4px 0 #fff2b6; }
+.dispense > span { font-size: 38px; }
+.dispense:active { transform: translateY(4px); box-shadow: 0 2px 0 #ad7628; }
+.dispense:disabled { cursor: default; opacity: 0.55; }
+.piece { position: fixed; z-index: 5; width: 96px; height: 100px; transform: translate(-50%, -50%); padding: 0; border: 0; background: transparent; color: var(--toy-color); font: 900 85px/1 'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif; text-shadow: 0 3px 0 #fff8e5, 0 6px 0 #00000025; filter: drop-shadow(0 8px 4px #75403d20); user-select: none; cursor: grab; }
+.piece.dragging { cursor: grabbing; filter: drop-shadow(0 12px 7px #75403d44); }
+@keyframes match-pop { 0% { transform: scale(0.75); } 65% { transform: scale(1.08); } 100% { transform: scale(1); } }
+@media (max-width: 650px) { .toy-room { padding: 12px; gap: 10px; grid-template-rows: auto minmax(340px, 1fr) auto 140px; } .shelves { grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(6, minmax(44px, 1fr)); } .cabinet { padding: 8px 10px 16px; border-width: 5px; } .slot { font-size: clamp(28px, 4.5vh, 42px); } header p, .machine-label small { display: none; } .brand-icon { padding: 12px 6px; font-size: 17px; } .dispenser { gap: 8px; padding: 10px; grid-template-columns: minmax(50px, 0.6fr) 1fr 90px; } .machine-label { font-size: 11px; letter-spacing: 1px; } .dispense { min-width: 0; min-height: 95px; flex-direction: column; gap: 0; padding: 5px; font-size: 12px; border-radius: 24px; } nav a { padding: 8px 10px; font-size: 12px; } .piece { font-size: 73px; } }
+@media (max-height: 500px) and (min-width: 651px) { .toy-room { padding: 8px 20px; gap: 7px; grid-template-rows: auto minmax(320px, 1fr) auto 105px; } header p { display: none; } h1 { font-size: 22px; } .brand-icon { padding: 10px; } .cabinet-top { padding-bottom: 4px; } .slot { font-size: 32px; } .tray { min-height: 65px; } .dispenser { padding: 5px 20px; } .dispense { min-height: 65px; } .piece { font-size: 62px; height: 75px; } }
+@media (min-width: 1000px) and (min-aspect-ratio: 3/2) {
+    .shelves { grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(3, minmax(44px, 1fr)); }
+    .slot { font-size: clamp(36px, 7vh, 76px); }
+    .toy-room { grid-template-rows: auto minmax(230px, 1fr) auto minmax(130px, 20%); }
+}
+@media (prefers-reduced-motion: reduce) { .slot.matched { animation: none; } }

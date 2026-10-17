@@ -23,6 +23,7 @@
     <style>
         .simple-mode .counter-card,
         .simple-mode .sketch-button,
+        .simple-mode .matching-button,
         .simple-mode #object-picker,
         .simple-mode .background-picker { display: none !important; }
         * {
@@ -54,7 +55,7 @@
         }
 
         [hidden] { display: none !important; }
-        #sketchpad-view { position: fixed; inset: 0; z-index: 20; }
+        #sketchpad-view, #matching-view { position: fixed; inset: 0; z-index: 20; }
 
         #background {
             position: fixed;
@@ -311,6 +312,7 @@
                 </svg>
                 
             </a>
+            <a class="action-button matching-button" href="#/matching" aria-label="Open letter and number matching" title="Letters & numbers"><strong>ABC</strong></a>
             <div class="object-picker" id="object-picker">
                 <button id="object-type" class="action-button" type="button" aria-label="Choose object type"
                     aria-haspopup="menu" aria-expanded="false" aria-controls="object-menu" title="Choose object type">
@@ -388,6 +390,7 @@
 
     </main>
     <section id="sketchpad-view" aria-label="Sketchpad" hidden></section>
+    <section id="matching-view" aria-label="Letter and number matching" hidden></section>
     <button id="app-update" class="action-button" type="button" hidden>Update available · Reload</button>
     <script src="/app.js"></script>
 </body>

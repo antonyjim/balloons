@@ -344,6 +344,8 @@ const snapshot = (): Promise<Blob> => {
   return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Could not export drawing')), 'image/png'))
 }
 bindActivation(root.querySelector<HTMLElement>('#back-to-balloons')!)
+const matchingLink = root.querySelector<HTMLElement>('#open-matching')
+if (matchingLink) bindActivation(matchingLink)
 const useButton = root.querySelector<HTMLButtonElement>('#use-drawing')!
 const status = root.querySelector<HTMLElement>('#sketch-status')!
 bindActivation(useButton, () => {

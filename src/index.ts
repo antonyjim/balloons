@@ -590,7 +590,6 @@ if (sketchLink) bindActivation(sketchLink)
 const playSession = setupPlaySession(cancelCanvasPointers)
 setupWorkspace({
     resolveView(view) { return playSession.resolveView(view) },
-    setAuto() { themeManager.setMode('auto') },
     setSimpleMode(enabled) { themeManager.setSimpleMode(enabled) },
     showBalloons(active) {
         if (!active) {

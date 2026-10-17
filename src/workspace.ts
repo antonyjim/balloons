@@ -1,3 +1,4 @@
+import { mountMatching, type MatchingApp } from './matching'
 import { bindActivation } from './activation'
 import { setupNavigation, type AppView } from './navigation'
 import { mountSketchpad, type Sketchpad } from './sketchpad'
@@ -5,7 +6,6 @@ import { themes } from './theme/themes'
 
 interface WorkspaceOptions {
     resolveView?(view: AppView): AppView
-    setAuto(): void
     setSimpleMode(enabled: boolean): void
     showBalloons(active: boolean): void
     setBackground(url: string | null): Promise<void>
@@ -14,12 +14,14 @@ interface WorkspaceOptions {
 export function setupWorkspace(options: WorkspaceOptions): void {
     const balloons = document.getElementById('balloons-view')!
     const sketchHost = document.getElementById('sketchpad-view')!
+    const matchingHost = document.getElementById('matching-view')!
     const trigger = document.getElementById('background-toggle')!
     const panel = document.getElementById('background-menu')!
     const input = document.querySelector<HTMLInputElement>('#background-file')!
     const drawingButton = document.querySelector<HTMLButtonElement>('#drawing-background')!
     const status = document.getElementById('background-status')!
     let sketch: Sketchpad | null = null
+    let matching: MatchingApp | null = null
     let ownedUrl: string | null = null
     let request = 0
     const close = (): void => { panel.hidden = true; trigger.setAttribute('aria-expanded', 'false') }
@@ -27,7 +29,6 @@ export function setupWorkspace(options: WorkspaceOptions): void {
     bindActivation(document.getElementById('simple-mode')!, () => {
         request++
         options.setSimpleMode(true)
-        options.setAuto()
         report(apply(null).then(() => {
             balloons.classList.add('simple-mode')
             exitSimple.hidden = false
@@ -63,11 +64,10 @@ export function setupWorkspace(options: WorkspaceOptions): void {
         status.textContent = 'Loading image?'
         void work.catch(() => { status.textContent = 'Could not load that image. Please try another.' })
     }
-    // Start with automatic settings even if a previous session saved a manual choice.
+    // Simple mode changes the controls, preserving the saved object selection.
     balloons.classList.add('simple-mode')
     exitSimple.hidden = false
     options.setSimpleMode(true)
-    options.setAuto()
     report(apply(null))
     bindActivation(trigger, () => {
         const open = panel.hidden
@@ -112,10 +112,15 @@ export function setupWorkspace(options: WorkspaceOptions): void {
     setupNavigation(requestedView => {
         const view = options.resolveView?.(requestedView) ?? requestedView
         const drawing = view === 'sketchpad'
+        const playing = view === 'matching'
+        const balloonView = view === 'balloons'
         close()
-        if (drawing) options.showBalloons(false)
-        balloons.hidden = drawing
+        if (!balloonView) options.showBalloons(false)
+        balloons.hidden = !balloonView
         sketchHost.hidden = !drawing
+        matchingHost.hidden = !playing
+        if (playing && !matching) matching = mountMatching(matchingHost)
+        matching?.setActive(playing)
         if (drawing && !sketch) {
             sketch = mountSketchpad(sketchHost, async blob => {
                 await useBlob(blob)
@@ -125,7 +130,7 @@ export function setupWorkspace(options: WorkspaceOptions): void {
         }
         sketch?.setActive(drawing)
         // Resize only after the balloon canvas is visible again.
-        if (!drawing) options.showBalloons(true)
-        document.title = drawing ? 'Sketchpad | Balloons' : 'Balloons'
+        if (balloonView) options.showBalloons(true)
+        document.title = drawing ? 'Sketchpad | Balloons' : playing ? 'Little letter shop | Balloons' : 'Balloons'
     })
 }

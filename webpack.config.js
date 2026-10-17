@@ -8,7 +8,8 @@ module.exports = {
   resolve: {
     alias: {
       'sketchpad-markup': path.resolve(__dirname, 'src/sketchpad/index.html'),
-      'sketchpad-styles': path.resolve(__dirname, 'src/sketchpad/style.css')
+      'sketchpad-styles': path.resolve(__dirname, 'src/sketchpad/style.css'),
+      'matching-styles': path.resolve(__dirname, 'src/matching/style.css')
     }
   },
   module: { rules: [{ test: /\.(html|css)$/, type: 'asset/source' }] },

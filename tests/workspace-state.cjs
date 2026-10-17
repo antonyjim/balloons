@@ -27,7 +27,9 @@ test('navigation accepts a sketchpad deep link and handles back/forward without 
         browser.dispatchEvent(new Event('hashchange'))
         browser.location.hash = '#unknown'
         browser.dispatchEvent(new Event('hashchange'))
-        assert.deepEqual(views, ['sketchpad', 'balloons', 'sketchpad', 'balloons'])
+        browser.location.hash = '#/matching'
+        browser.dispatchEvent(new Event('hashchange'))
+        assert.deepEqual(views, ['sketchpad', 'balloons', 'sketchpad', 'balloons', 'matching'])
         assert.equal(global.window, browser)
     } finally { global.window = previous }
 })

@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const vm = require('node:vm')
 const sessionModule = require('../dist-ts/playSession')
 
-test('hidden timer settings, cooldown navigation, return balloon, and idle screensaver work together', () => {
+for (const activity of ['sketchpad', 'matching']) test(`cooldown settings, return balloon, and idle screensaver work with ${activity}`, () => {
     let now = 0, interval, timeout, breaks = 0, pops = 0, saverVisible = false
     class Element {
         events = new Map()
@@ -67,6 +67,7 @@ test('hidden timer settings, cooldown navigation, return balloon, and idle scree
     now = 4000
     target.emit('pointerup'); target.emit('click')
     assert.equal(ordinaryClicks, 1, 'a long hold must not apply the sky selection')
+    dialog.querySelector('[name="cooldownApp"]').value = activity
     dialog.querySelector('[name="enabled"]').value = 'true'
     dialog.querySelector('[name="timeLimit"]').value = '0.1'
     dialog.querySelector('[name="cooldown"]').value = '0.1'
@@ -82,11 +83,11 @@ test('hidden timer settings, cooldown navigation, return balloon, and idle scree
     app.objectCreated()
     assert.equal(timer.textContent, '0:03', 'timer counts down without resetting for every object')
     now = 26_000; interval()
-    assert.equal(location.hash, '/sketchpad')
-    location.hash = '#/sketchpad' // Browser location normalizes assigned hashes.
+    assert.equal(location.hash, '/' + activity)
+    location.hash = '#/' + activity // Browser location normalizes assigned hashes.
     interval()
     assert.equal(balloon.hidden, true)
-    assert.equal(app.resolveView('balloons'), 'sketchpad', 'normal return navigation cannot skip cooldown')
+    assert.equal(app.resolveView('balloons'), activity, 'normal return navigation cannot skip cooldown')
     assert.equal(sketch.shadowRoot.querySelector('#back-to-balloons').hidden, true)
     now = 32_000; interval()
     assert.equal(balloon.hidden, false)

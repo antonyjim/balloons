@@ -5,6 +5,28 @@ const vm = require('node:vm')
 const { createRequire } = require('node:module')
 const path = require('node:path')
 
+test('simple mode defaults to random per pointer and preserves every saved object mode, including auto', () => {
+    const filename = path.resolve('dist-ts/theme/ThemeManager.js')
+    for (const saved of [null, 'auto', 'random', 'latex', 'hot-air', 'bubble', 'paint', 'watermelon', 'apple', 'duck']) {
+        const module = { exports: {} }, writes = []
+        const context = {
+            module, exports: module.exports, require: createRequire(filename),
+            localStorage: { getItem: key => key === 'balloons.theme.finish' ? saved : null, setItem: (...args) => writes.push(args) },
+            setInterval() {}, clearInterval() {},
+            document: { addEventListener() {}, removeEventListener() {} },
+            window: { addEventListener() {}, removeEventListener() {} }
+        }
+        vm.runInNewContext(fs.readFileSync(filename, 'utf8'), context)
+        const manager = new module.exports.ThemeManager()
+        manager.setSimpleMode(true)
+        assert.equal(manager.current.finishMode, saved ?? 'random')
+        manager.setSimpleMode(false)
+        manager.setSimpleMode(true)
+        assert.equal(manager.current.finishMode, saved ?? 'random')
+        assert.equal(writes.length, 0, 'opening or toggling simple mode must not overwrite preferences')
+    }
+})
+
 test('simple mode excludes watermelon immediately and throughout automatic rotation', () => {
     const filename = path.resolve('dist-ts/theme/ThemeManager.js')
     let now = Date.now()

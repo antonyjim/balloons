@@ -30,11 +30,13 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
             timer.setAttribute('aria-label', session.settings.enabled ? `Play time remaining: ${timer.textContent}` : 'Play timer disabled')
             timer.parentElement?.setAttribute('title', session.settings.enabled ? 'Starts with the first object; resets after an idle cooldown' : 'Play timer disabled')
         }
-        const drawing = location.hash === '#/sketchpad'
+        const drawing = location.hash === '#/sketchpad' || location.hash === '#/matching'
         returnBalloon.hidden = session.phase !== 'ready' || !drawing
         for (const id of ['back-to-balloons', 'use-drawing']) {
-            const control = document.getElementById('sketchpad-view')?.shadowRoot?.querySelector<HTMLElement>(`#${id}`)
-            if (control) control.hidden = session.phase !== 'play'
+            for (const host of ['sketchpad-view', 'matching-view']) {
+                const control = document.getElementById(host)?.shadowRoot?.querySelector<HTMLElement>(`#${id}`)
+                if (control) control.hidden = session.phase !== 'play'
+            }
         }
     }
     const popReturnBalloon = (): void => {
@@ -64,6 +66,7 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
         <h2 id="play-settings-title">Play timer</h2>
         <label>Time limit <span>(minutes)</span><input name="timeLimit" type="number" min="0.1" max="240" step="0.1" required></label>
         <label>Cooldown <span>(minutes)</span><input name="cooldown" type="number" min="0.1" max="240" step="0.1" required></label>
+        <label>Cooldown activity<select name="cooldownApp"><option value="sketchpad">Drawing</option><option value="matching">Letters & numbers</option></select></label>
         <label>Status<select name="enabled"><option value="false">Disabled</option><option value="true">Enabled</option></select></label>
         <p>The timer starts with the first new object. After an idle cooldown, the next object starts a fresh session. The screensaver waits for 10 minutes without a new object, or the time limit if longer.</p>
         <div class="play-settings-actions"><button type="button" data-cancel>Cancel</button><button type="submit">Save</button></div>
@@ -74,12 +77,13 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
         field('timeLimit').value = String(session.settings.timeLimit)
         field('cooldown').value = String(session.settings.cooldown)
         field('enabled').value = String(session.settings.enabled)
+        field('cooldownApp').value = session.settings.cooldownApp ?? 'sketchpad'
         if (!dialog.open) dialog.showModal()
     }
     dialog.querySelector('[data-cancel]')!.addEventListener('click', () => dialog.close())
     dialog.querySelector('form')!.addEventListener('submit', event => {
         event.preventDefault()
-        const settings = parsePlaySettings({ enabled: field('enabled').value === 'true', timeLimit: Number(field('timeLimit').value), cooldown: Number(field('cooldown').value) })
+        const settings = parsePlaySettings({ enabled: field('enabled').value === 'true', timeLimit: Number(field('timeLimit').value), cooldown: Number(field('cooldown').value), cooldownApp: field('cooldownApp').value })
         session.configure(settings, Date.now())
         try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)) } catch { /* storage unavailable */ }
         dialog.close()
@@ -126,7 +130,7 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
         session.tick(now)
         if (before === 'play' && session.phase !== 'play') {
             onBreak()
-            location.hash = '/sketchpad'
+            location.hash = session.settings.cooldownApp === 'matching' ? '/matching' : '/sketchpad'
         }
         if (session.screensaverDue(now) && !idleShown && !dialog.open) {
             idleShown = true
@@ -139,9 +143,10 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
         objectCreated() { session.objectCreated(Date.now()); idleShown = false; saver.hide(); sync() },
         resolveView(view) {
             queueMicrotask(sync)
-            if (session.phase !== 'play' && view !== 'sketchpad') {
-                history.replaceState(null, '', '#/sketchpad')
-                return 'sketchpad'
+            if (session.phase !== 'play' && view === 'balloons') {
+                const activity = session.settings.cooldownApp === 'matching' ? 'matching' : 'sketchpad'
+                history.replaceState(null, '', `#/${activity}`)
+                return activity
             }
             return view
         }
