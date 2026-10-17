@@ -37,7 +37,8 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
             if (control) control.hidden = session.phase !== 'play'
         }
     }
-    bindActivation(returnBalloon, () => {
+    const popReturnBalloon = (): void => {
+        if (session.phase !== 'ready' || returnBalloon.hidden) return
         unlockAudio()
         playPopSound('latex')
         session.returnToPlay(Date.now())
@@ -45,7 +46,16 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
         returnBalloon.hidden = true
         location.hash = '/balloons'
         sync()
+    }
+    // Pop on contact, like objects in the main canvas. Do not require a precise
+    // pointer-up inside a moving target or a synthesized touch click.
+    returnBalloon.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return
+        event.preventDefault()
+        event.stopPropagation()
+        popReturnBalloon()
     })
+    returnBalloon.addEventListener('click', popReturnBalloon) // Keyboard activation.
 
     const dialog = document.createElement('dialog')
     dialog.className = 'play-settings'
@@ -55,7 +65,7 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
         <label>Time limit <span>(minutes)</span><input name="timeLimit" type="number" min="0.1" max="240" step="0.1" required></label>
         <label>Cooldown <span>(minutes)</span><input name="cooldown" type="number" min="0.1" max="240" step="0.1" required></label>
         <label>Status<select name="enabled"><option value="false">Disabled</option><option value="true">Enabled</option></select></label>
-        <p>The timer starts with the first new object. The cooldown also sets the idle delay: after that long without a new object, the screensaver appears and the next object starts a fresh session.</p>
+        <p>The timer starts with the first new object. After an idle cooldown, the next object starts a fresh session. The screensaver waits for 10 minutes without a new object, or the time limit if longer.</p>
         <div class="play-settings-actions"><button type="button" data-cancel>Cancel</button><button type="submit">Save</button></div>
     </form>`
     document.body.append(dialog)
@@ -118,7 +128,7 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
             onBreak()
             location.hash = '/sketchpad'
         }
-        if (session.idle(now) && !idleShown && !dialog.open) {
+        if (session.screensaverDue(now) && !idleShown && !dialog.open) {
             idleShown = true
             onBreak()
             saver.show()

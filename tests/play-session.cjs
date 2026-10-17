@@ -3,6 +3,18 @@ const assert = require('node:assert/strict')
 const { PlaySession, parsePlaySettings } = require('../dist-ts/playSession')
 const settings = { enabled: true, timeLimit: 2, cooldown: 3 }
 
+test('screensaver waits for the greater of ten minutes or the time limit, independently of cooldown', () => {
+    for (const timeLimit of [2, 10, 15]) {
+        const session = new PlaySession({ ...settings, timeLimit, cooldown: 0.1 }, 1000)
+        const delay = Math.max(10, timeLimit) * 60_000
+        assert.equal(session.screensaverDue(1000 + delay - 1), false)
+        assert.equal(session.screensaverDue(1000 + delay), true)
+        session.objectCreated(1000 + delay)
+        assert.equal(session.screensaverDue(1000 + delay), false)
+        assert.equal(session.idleDurationMs, 6000)
+    }
+})
+
 test('timer waits for the first object, expires once, then offers return only after cooldown', () => {
     const session = new PlaySession(settings, 0)
     session.tick(120_000)

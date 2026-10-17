@@ -20,6 +20,7 @@ test('hidden timer settings, cooldown navigation, return balloon, and idle scree
         emit(name, values = {}) {
             let stopped = false
             const event = { button: 0, pointerId: 1, clientX: 10, clientY: 10, preventDefault() {},
+                stopPropagation() {},
                 stopImmediatePropagation() { stopped = true }, ...values }
             for (const { fn } of [...(this.events.get(name) ?? [])].sort((a, b) => Number(b.capture) - Number(a.capture))) {
                 fn(event)
@@ -89,11 +90,15 @@ test('hidden timer settings, cooldown navigation, return balloon, and idle scree
     assert.equal(sketch.shadowRoot.querySelector('#back-to-balloons').hidden, true)
     now = 32_000; interval()
     assert.equal(balloon.hidden, false)
+    balloon.emit('pointerdown', { pointerType: 'touch', isPrimary: false })
+    assert.equal(pops, 1, 'a secondary touch pops on contact without waiting for click or pointer-up')
     balloon.emit('click')
-    assert.equal(pops, 1)
+    assert.equal(pops, 1, 'a follow-up click must not pop twice')
     assert.equal(balloon.hidden, true)
     assert.equal(app.resolveView('balloons'), 'balloons')
     now += 6000; interval()
+    assert.equal(saverVisible, false, 'a short cooldown must not trigger the screensaver')
+    now += 594_000; interval()
     assert.equal(saverVisible, true)
     app.objectCreated()
     assert.equal(saverVisible, false)

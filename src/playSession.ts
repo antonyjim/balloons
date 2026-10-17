@@ -15,6 +15,8 @@ export class PlaySession {
     cooldownUntil = 0
     constructor(public settings: PlaySettings, now: number) { this.lastObjectAt = now }
     get idleDurationMs(): number { return this.settings.cooldown * 60_000 }
+    get screensaverDurationMs(): number { return Math.max(10, this.settings.timeLimit) * 60_000 }
+    screensaverDue(now: number): boolean { return now - this.lastObjectAt >= this.screensaverDurationMs }
     objectCreated(now: number): void {
         if (this.phase !== 'play') return
         if (this.startedAt === null || now - this.lastObjectAt >= this.idleDurationMs) this.startedAt = now
