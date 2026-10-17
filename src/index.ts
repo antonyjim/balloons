@@ -527,15 +527,22 @@ function syncInflateSound(): void {
         startInflateSound(finish)
     }
     else {
-        stopInflateSoundFactory()()
+        stopInflateSound()
     }
 }
 
-function stopInflateSoundFactory() {
-    return () => {
-        stopBurnerSound()
-        stopInflateSound(activePointers)
+function cancelCanvasPointers(): void {
+    activePointers.clear()
+    basketDrags.clear()
+    for (const balloon of balloons) {
+        if (balloon.pointerId === null) continue
+        const pointerId = balloon.pointerId
+        balloon.pointerId = null
+        balloon.growing = false
+        if (canvas.hasPointerCapture(pointerId)) canvas.releasePointerCapture(pointerId)
     }
+    stopBurnerSound()
+    stopInflateSound()
 }
 
 
@@ -551,12 +558,12 @@ canvas.addEventListener('pointercancel', event => releaseBalloon(event.pointerId
 canvas.addEventListener('lostpointercapture', event => releaseBalloon(event.pointerId))
 
 // Backgrounding
-window.addEventListener('blur', stopInflateSoundFactory())
-window.addEventListener('pagehide', stopInflateSoundFactory())
+window.addEventListener('blur', cancelCanvasPointers)
+window.addEventListener('pagehide', cancelCanvasPointers)
 
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-        stopInflateSoundFactory()()
+        cancelCanvasPointers()
     }
 })
 

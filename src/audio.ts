@@ -7,7 +7,6 @@ const bubblePopUrl = '/sounds/bubble-pop.wav'
 const hotAirInflateUrl = '/sounds/hot-air-inflate.wav'
 const hotAirPopUrl = '/sounds/hot-air-pop.wav'
 
-import { Balloon } from './objects/balloonTypes'
 import { BalloonFinish } from './theme/types'
 
 type SoundType = 'inflate' | 'pop'
@@ -194,11 +193,10 @@ export function startInflateSound(
     syncInflateSource()
 }
 
-export function stopInflateSound(activePointers?: Map<Number, Balloon>): void {
+export function stopInflateSound(): void {
     // Invalidate any pending asynchronous start.
     inflateRequested = false
     stopInflateSource()
-    activePointers?.clear()
 }
 
 export function playPopSound(finish: BalloonFinish = 'latex'): void {

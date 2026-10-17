@@ -46,7 +46,10 @@ test('one gesture unlocks the playback context; loading is shared and stopping c
         audio.startInflateSound('bubble')
         assert.equal(contexts.length, 1)
         assert.equal(contexts[0].resumes, 1, 'resume must happen synchronously on the gesture')
-        audio.stopInflateSound()
+        const held = { pointerId: 7, growing: true }
+        const pointers = new Map([[7, held]])
+        audio.stopInflateSound(pointers)
+        assert.equal(pointers.get(7), held, 'stopping sound must preserve pointer ownership for release')
         releaseFetch()
         await preload
         await flush()
