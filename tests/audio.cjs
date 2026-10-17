@@ -72,3 +72,58 @@ test('one gesture unlocks the playback context; loading is shared and stopping c
         global.fetch = originalFetch
     }
 })
+
+test('burners share one capped noise loop and stop when inactive or suspended', async () => {
+    const originalContext = global.AudioContext, originalFetch = global.fetch
+    const sources = [], gains = []
+    let instance
+    class BurnerContext {
+        state = 'suspended'
+        destination = {}
+        sampleRate = 44100
+        currentTime = 0
+        constructor() { instance = this }
+        addEventListener() {}
+        resume() { this.state = 'running'; return Promise.resolve() }
+        close() { this.state = 'closed'; return Promise.resolve() }
+        decodeAudioData() { return Promise.resolve({ decoded: true }) }
+        createBuffer(channels, length) { return { getChannelData: () => new Float32Array(length) } }
+        createGain() {
+            const gain = { gain: { value: 0, target: 0, setTargetAtTime(value) { this.target = value } }, connect() {}, disconnect() {} }
+            gains.push(gain)
+            return gain
+        }
+        createBufferSource() {
+            const source = { started: false, stopped: false, connect() {}, disconnect() {},
+                start() { this.started = true }, stop() { this.stopped = true } }
+            sources.push(source)
+            return source
+        }
+    }
+    global.AudioContext = BurnerContext
+    global.fetch = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(16) })
+    try {
+        audio.setBurnerSoundLevel(1)
+        assert.equal(sources.length, 0, 'a frame update must not create a context before user interaction')
+        audio.unlockAudio()
+        await flush()
+        audio.setBurnerSoundLevel(1)
+        assert.equal(sources.length, 1)
+        const initialGain = gains[0].gain.target
+        for (let i = 0; i < 250; i++) audio.setBurnerSoundLevel(i + 1)
+        assert.equal(sources.length, 1)
+        assert.ok(gains[0].gain.target > initialGain && gains[0].gain.target <= 0.22)
+        audio.stopBurnerSound()
+        assert.equal(sources[0].stopped, true)
+        instance.state = 'suspended'
+        audio.setBurnerSoundLevel(2)
+        assert.equal(sources.length, 1)
+        audio.unlockAudio()
+        await flush()
+        assert.equal(sources.length, 2)
+    } finally {
+        audio.disposeSounds()
+        global.AudioContext = originalContext
+        global.fetch = originalFetch
+    }
+})

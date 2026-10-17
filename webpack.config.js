@@ -1,9 +1,17 @@
 const path = require('path')
 const CopyWebpackPlugin = require('copy-webpack-plugin')
+const OfflineBuildPlugin = require('./scripts/offline-build.cjs')
 
 module.exports = {
   mode: 'development',
   entry: './dist-ts/index.js',
+  resolve: {
+    alias: {
+      'sketchpad-markup': path.resolve(__dirname, 'src/sketchpad/index.html'),
+      'sketchpad-styles': path.resolve(__dirname, 'src/sketchpad/style.css')
+    }
+  },
+  module: { rules: [{ test: /\.(html|css)$/, type: 'asset/source' }] },
 
   output: {
     filename: 'app.js',
@@ -17,7 +25,8 @@ module.exports = {
       patterns: [
         { from: 'public', to: '.' }
       ]
-    })
+    }),
+    new OfflineBuildPlugin()
   ],
 
 
@@ -29,6 +38,6 @@ module.exports = {
     },
     hot: true,
     port: 3000,
-    watchFiles: ['dist-ts/**/*.js']
+    watchFiles: ['dist-ts/**/*.js', 'src/sketchpad/*.html', 'src/sketchpad/*.css']
   }
 }

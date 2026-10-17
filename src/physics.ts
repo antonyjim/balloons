@@ -1,10 +1,35 @@
+import { getWatermelonToughness } from './objects/watermelon'
+import { shouldIgniteHotAir } from './objects/hotAirFire'
+import { updateHotAirSuspension, updateHotAirBurner, ensureSuspendedBasket } from './objects/hotAirBalloon'
 import type { PhysicsOptions } from './objects/physicsOptions'
 import { Balloon, BalloonConfig } from './objects/balloonTypes'
 import { popBalloon } from './objects/balloon'
-import { getPhysicsOptions } from './objects/objectDefinitions'
+import { getPhysicsOptions, getObjectDefinition } from './objects/objectDefinitions'
 import { getDeviceTilt, updateDeviceMotion } from './deviceMotion'
 
 let ambientTime = 0
+
+// Resolve overrides once per body, rather than allocating settings for every candidate pair.
+const frameOptions = new Map<Balloon, Readonly<PhysicsOptions>>()
+const typeOptions = new Map<Balloon["finish"], Readonly<PhysicsOptions>>()
+function collectOptions(balloons: Balloon[], config: BalloonConfig): ReadonlyMap<Balloon, Readonly<PhysicsOptions>> {
+    frameOptions.clear()
+    typeOptions.clear()
+    for (const balloon of balloons) {
+        if (balloon.popped) continue
+        if (balloon.physics) {
+            frameOptions.set(balloon, getPhysicsOptions(balloon, config))
+        } else {
+            let options = typeOptions.get(balloon.finish)
+            if (!options) {
+                options = getPhysicsOptions(balloon, config)
+                typeOptions.set(balloon.finish, options)
+            }
+            frameOptions.set(balloon, options)
+        }
+    }
+    return frameOptions
+}
 
 // Reuse the cells and their arrays between frames.
 const cells = new Map<number, Balloon[]>()
@@ -34,7 +59,7 @@ export function updateBreeze(dt: number): void {
         (breezeTarget - BREEZE_STRENGTH) * smoothing
 }
 
-function clampVelocity(balloon: Balloon, physics = getPhysicsOptions(balloon)): void {
+function clampVelocity(balloon: { vx: number, vy: number }, physics: Readonly<PhysicsOptions>): void {
     const sq = balloon.vx * balloon.vx + balloon.vy * balloon.vy
     if (sq <= physics.maxSpeed * physics.maxSpeed) return
     const scale = physics.maxSpeed / Math.sqrt(sq)
@@ -72,7 +97,7 @@ export function popWithForce(balloons: Balloon[], popped: Balloon): void {
         balloon.vx += Math.cos(direction) * impulse
         balloon.vy += Math.sin(direction) * impulse
         balloon.angularVelocity += (Math.random() - 0.5) * impulse * getPhysicsOptions(balloon).rotationTransfer
-        clampVelocity(balloon)
+        clampVelocity(balloon, getPhysicsOptions(balloon))
         clampSpin(balloon)
     }
 }
@@ -89,26 +114,43 @@ export function updateBalloonPhysics(
     ambientTime += dt
     updateDeviceMotion(dt)
 
+    const options = collectOptions(balloons, config)
     for (const balloon of balloons) {
         if (balloon.popped) continue
-        integrate(balloon, dt, config)
-        resolveScreenCollision(balloon, width, height, config)
+        const physics = options.get(balloon)!
+        const definition = getObjectDefinition(balloon.finish)
+        if (definition.updatePhysics) definition.updatePhysics(balloon, dt, width, height, physics, balloons)
+        else {
+            integrate(balloon, dt, physics, height)
+            resolveScreenCollision(balloon, width, height, physics)
+        }
     }
 
-    resolveBalloonCollisions(balloons, config)
+    resolveBalloonCollisions(balloons, config, options)
 
     // Pairwise positional corrections can move objects beyond the screen.
     for (const balloon of balloons) {
-        if (!balloon.popped) resolveScreenCollision(balloon, width, height, config)
+        if (balloon.popped) continue
+        const physics = options.get(balloon)!
+        const definition = getObjectDefinition(balloon.finish)
+        if (definition.constrain) definition.constrain(balloon, width, height, physics, balloons)
+        else resolveScreenCollision(balloon, width, height, physics)
+        if (balloon.finish === 'hot-air') {
+            updateHotAirSuspension(balloon, dt, width, height, physics)
+            clampVelocity(balloon, physics)
+            clampSpin(balloon, physics)
+            if (shouldIgniteHotAir(balloon, physics)) popBalloon(balloon)
+        }
     }
 }
 
 function integrate(
     balloon: Balloon,
     dt: number,
-    config: BalloonConfig
+    physics: Readonly<PhysicsOptions>,
+    viewportHeight: number
 ): void {
-    const physics = getPhysicsOptions(balloon, config)
+    const burnerLift = balloon.finish === 'hot-air' ? updateHotAirBurner(balloon, dt, physics, viewportHeight) : 0
     if (balloon.pointerId !== null) {
         const follow = 1 - Math.exp(-physics.anchorStrength * dt)
 
@@ -147,7 +189,7 @@ function integrate(
 
     // Consistent upward buoyancy
     const ay =
-        -physics.buoyancy +
+        -physics.buoyancy - burnerLift +
         Math.sin(t * 0.43 + phase) * physics.verticalBreezeAmplitude
 
     balloon.vx += ax * dt
@@ -194,9 +236,8 @@ function integrate(
 }
 
 function resolveScreenCollision(
-    balloon: Balloon, width: number, height: number, config: Partial<PhysicsOptions>
+    balloon: Balloon, width: number, height: number, physics: Readonly<PhysicsOptions>
 ): void {
-    const physics = getPhysicsOptions(balloon, config)
     // Conservative circular bound that includes the knot and rotation.
     const r = balloon.radius * physics.screenRadiusRatio
     const minX = Math.min(r, width * 0.5)
@@ -228,14 +269,21 @@ function resolveScreenCollision(
     }
 }
 
+const impactVelocities = new Map<Balloon, { x: number, y: number, vx: number, vy: number }>()
+const collisionBreaks = new Set<Balloon>()
+
 export function resolveBalloonCollisions(
     balloons: Balloon[],
-    config: BalloonConfig
+    config: BalloonConfig,
+    options = collectOptions(balloons, config)
 ): void {
+    collisionBreaks.clear()
+    impactVelocities.clear()
     let maxRadius = 0
     for (const balloon of balloons) {
         if (balloon.popped) continue
-        const physics = getPhysicsOptions(balloon, config)
+        const physics = options.get(balloon)!
+        if (balloon.finish === 'watermelon') impactVelocities.set(balloon, { x: balloon.x, y: balloon.y, vx: balloon.vx, vy: balloon.vy })
         maxRadius = Math.max(maxRadius,
             balloon.radius * physics.collisionRadiusRatio + physics.collisionPadding / 2)
     }
@@ -275,21 +323,109 @@ export function resolveBalloonCollisions(
             for (let i = 0; i < cell.length; i++) {
                 const start = k === 0 ? i + 1 : 0
                 for (let j = start; j < other.length; j++) {
-                    resolveCollision(cell[i], other[j], config)
+                    resolveCollision(cell[i], other[j], options)
                 }
             }
         }
     }
+    // Query the same spatial grid around each basket, including baskets far below
+    // their envelope. Narrow phase uses the rotated basket rather than its ropes.
+    for (const owner of balloons) {
+        if (owner.popped || owner.finish !== 'hot-air') continue
+        const physics = options.get(owner)!
+        const basket = ensureSuspendedBasket(owner, physics)
+        const reach = maxRadius + owner.radius * 0.25
+        for (let cy = Math.floor((basket.y - reach) / cellSize); cy <= Math.floor((basket.y + reach) / cellSize); cy++) {
+            for (let cx = Math.floor((basket.x - reach) / cellSize); cx <= Math.floor((basket.x + reach) / cellSize); cx++) {
+                for (const other of cells.get(cy * columns + cx) ?? []) {
+                    if (other === owner || other.popped) continue
+                    resolveBasketContact(owner, other, physics, options.get(other)!)
+                }
+            }
+        }
+    }
+    // Finish identifying contacts before popping, so every fruit in a hard impact breaks.
+    for (const melon of collisionBreaks) popBalloon(melon)
+    collisionBreaks.clear()
+    impactVelocities.clear()
 }
 
-function resolveCollision(a: Balloon, b: Balloon, config: BalloonConfig): void {
-    const aPhysics = getPhysicsOptions(a, config)
-    const bPhysics = getPhysicsOptions(b, config)
+function resolveBasketContact(owner: Balloon, other: Balloon, physics: Readonly<PhysicsOptions>, otherPhysics: Readonly<PhysicsOptions>): void {
+    const basket = owner.suspension!
+    const c = Math.cos(basket.angle), s = Math.sin(basket.angle)
+    const dx = other.x - basket.x, dy = other.y - basket.y
+    const lx = dx * c + dy * s, ly = -dx * s + dy * c
+    const hw = owner.radius * 0.205, hh = owner.radius * 0.105
+    let qx = Math.max(-hw, Math.min(hw, lx)), qy = Math.max(-hh, Math.min(hh, ly))
+    let nx = lx - qx, ny = ly - qy
+    let distance = Math.hypot(nx, ny)
+    const radius = other.radius * otherPhysics.collisionRadiusRatio + otherPhysics.collisionPadding / 2
+    if (distance >= radius) return
+    if (distance < 0.00001) {
+        if (hw - Math.abs(lx) < hh - Math.abs(ly)) {
+            nx = lx < 0 ? -1 : 1; ny = 0; qx = nx * hw
+            distance = -(hw - Math.abs(lx))
+        } else {
+            nx = 0; ny = ly < 0 ? -1 : 1; qy = ny * hh
+            distance = -(hh - Math.abs(ly))
+        }
+    } else { nx /= distance; ny /= distance }
+    const wx = nx * c - ny * s, wy = nx * s + ny * c
+    const rx = qx * c - qy * s, ry = qx * s + qy * c
+    const torque = rx * wy - ry * wx
+    const inverseMass = 1 / Math.max(0.01, physics.basketMassRatio)
+    const inverseInertia = 12 * inverseMass / (owner.radius ** 2 * (0.37 ** 2 + 0.19 ** 2))
+    const otherMass = other.pointerId === null ? 1 : 0
+    const weight = inverseMass + otherMass + torque * torque * inverseInertia
+    const correction = (radius - distance) / weight
+    basket.x -= wx * correction * inverseMass
+    basket.y -= wy * correction * inverseMass
+    basket.angle -= torque * correction * inverseInertia
+    other.x += wx * correction * otherMass
+    other.y += wy * correction * otherMass
+    const closing = (other.vx - basket.vx + basket.angularVelocity * ry) * wx
+        + (other.vy - basket.vy - basket.angularVelocity * rx) * wy
+    const push = otherMass === 0 ? Math.min(physics.maxPushImpulse,
+        physics.pushBaseImpulse + (radius - distance) * physics.pushPenetrationImpulse) : 0
+    const impulse = Math.max(push, -(1 + physics.collisionRestitution) * closing / weight, 0)
+    basket.vx -= wx * impulse * inverseMass
+    basket.vy -= wy * impulse * inverseMass
+    basket.angularVelocity = Math.max(-8, Math.min(8, basket.angularVelocity - torque * impulse * inverseInertia))
+    other.vx += wx * impulse * otherMass
+    other.vy += wy * impulse * otherMass
+    clampVelocity(basket, physics)
+    clampVelocity(other, otherPhysics)
+}
+
+function resolveCollision(a: Balloon, b: Balloon, options: ReadonlyMap<Balloon, Readonly<PhysicsOptions>>): void {
+    if (a.popped || b.popped) return
+    const aPhysics = options.get(a)!
+    const bPhysics = options.get(b)!
     let dx = b.x - a.x
     let dy = b.y - a.y
     let distSq = dx * dx + dy * dy
     const minDistance = a.radius * aPhysics.collisionRadiusRatio + b.radius * bPhysics.collisionRadiusRatio +
         (aPhysics.collisionPadding + bPhysics.collisionPadding) / 2
+    if (a.finish === 'watermelon' && b.finish === 'watermelon') {
+        // Incoming poses and velocities preserve all contacts in a multi-melon impact.
+        const av = impactVelocities.get(a)!
+        const bv = impactVelocities.get(b)!
+        const contactX = bv.x - av.x, contactY = bv.y - av.y
+        const contactSq = contactX * contactX + contactY * contactY
+        if (contactSq < minDistance * minDistance) {
+            const relativeX = bv.vx - av.vx, relativeY = bv.vy - av.vy
+            const closingSpeed = contactSq > 0.000001
+                ? -(relativeX * contactX + relativeY * contactY) / Math.sqrt(contactSq)
+                : Math.sqrt(relativeX * relativeX + relativeY * relativeY)
+            const threshold = Math.min(
+                aPhysics.watermelonCollisionBreakSpeed * getWatermelonToughness(a, aPhysics),
+                bPhysics.watermelonCollisionBreakSpeed * getWatermelonToughness(b, bPhysics))
+            if (closingSpeed >= threshold && closingSpeed > 0) {
+                collisionBreaks.add(a)
+                collisionBreaks.add(b)
+            }
+        }
+    }
     if (distSq >= minDistance * minDistance) return
 
     if (distSq < 0.000001) {

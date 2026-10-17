@@ -18,6 +18,8 @@ const SOUND_URLS: Record<SoundKey, string> = {
     'latex:pop': latexPopUrl,
     'paint:inflate': latexInflateUrl,
     'paint:pop': latexPopUrl,
+    'watermelon:inflate': latexInflateUrl,
+    'watermelon:pop': latexPopUrl,
 
     'bubble:inflate': bubbleInflateUrl,
     'bubble:pop': bubblePopUrl,
@@ -44,7 +46,7 @@ let inflateGain: GainNode | null = null
 function getContext(): AudioContext {
     if (!context || context.state === 'closed') {
         context = new AudioContext()
-        context.addEventListener('statechange', syncInflateSource)
+        context.addEventListener('statechange', () => { syncInflateSource(); syncBurnerSource() })
     }
     return context
 }
@@ -108,7 +110,7 @@ export function unlockAudio(init = false): void {
     // Call resume synchronously inside the pointer handler, before loading awaits.
     if (ctx.state !== 'running' && !unlockPromise) {
         const generation = audioGeneration
-        unlockPromise = ctx.resume().then(syncInflateSource).catch(error => {
+        unlockPromise = ctx.resume().then(() => { syncInflateSource(); syncBurnerSource() }).catch(error => {
             console.warn('AudioContext resume failed:', error)
         }).finally(() => {
             if (generation === audioGeneration) unlockPromise = null
@@ -225,6 +227,7 @@ export function playPopSound(finish: BalloonFinish = 'latex'): void {
 
 export function suspendSounds(): void {
     stopInflateSound()
+    stopBurnerSound()
 
     if (context?.state === 'running') {
         void context.suspend()
@@ -233,6 +236,8 @@ export function suspendSounds(): void {
 
 export function disposeSounds(): void {
     stopInflateSound()
+    stopBurnerSound()
+    burnerBuffer = null
 
     const ctx = context
     audioGeneration++
@@ -247,4 +252,56 @@ export function disposeSounds(): void {
 
     buffers.clear()
     preloadPromise = null
+}
+let burnerSource: AudioBufferSourceNode | null = null
+let burnerGain: GainNode | null = null
+let burnerBuffer: AudioBuffer | null = null
+let burnerLevel = 0
+
+/** Mix all burners into one quiet noise bed, rather than creating hundreds of loops. */
+export function setBurnerSoundLevel(intensity: number): void {
+    burnerLevel = Math.min(0.22, 0.07 * Math.sqrt(Math.max(0, intensity)))
+    syncBurnerSource()
+}
+export function stopBurnerSound(): void {
+    burnerLevel = 0
+    syncBurnerSource()
+}
+function syncBurnerSource(): void {
+    const ctx = context
+    if (!ctx || ctx.state !== 'running' || burnerLevel <= 0) {
+        if (burnerSource) { burnerSource.stop(); burnerSource.disconnect(); burnerSource = null }
+        if (burnerGain) { burnerGain.disconnect(); burnerGain = null }
+        return
+    }
+    if (!burnerSource) {
+        if (!burnerBuffer) {
+            burnerBuffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate)
+            const data = burnerBuffer.getChannelData(0)
+            let low = 0, rumble = 0
+            let seed = 731
+            for (let i = 0; i < data.length; i++) {
+                seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+                const noise = seed / 2147483648 - 1
+                low += (noise - low) * 0.12
+                rumble += (noise - rumble) * 0.015
+                data[i] = (low * 0.8 + rumble * 2) * 1.5
+            }
+            // Crossfade the loop seam once, keeping the live path allocation-free.
+            const fade = Math.min(2048, data.length / 4)
+            for (let i = 0; i < fade; i++) {
+                const t = i / fade
+                data[i] = data[data.length - fade + i] * (1 - t) + data[i] * t
+            }
+        }
+        burnerSource = ctx.createBufferSource()
+        burnerGain = ctx.createGain()
+        burnerGain.gain.value = 0
+        burnerSource.buffer = burnerBuffer
+        burnerSource.loop = true
+        burnerSource.connect(burnerGain)
+        burnerGain.connect(ctx.destination)
+        burnerSource.start()
+    }
+    burnerGain!.gain.setTargetAtTime(burnerLevel, ctx.currentTime, 0.1)
 }

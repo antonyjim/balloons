@@ -1,3 +1,11 @@
+import { setupWorkspace } from './workspace'
+import { maximumRadius, availableRadius, enforceSizeLimits } from './objects/sizeLimits'
+import { setupAppUpdates } from './appUpdates'
+import { containsBasketPoint, moveHotAirAssembly } from './objects/hotAirBalloon'
+import { sceneGround } from './sceneGround'
+import { bindActivation } from './activation'
+import { preloadBalloonMaterials } from './objects/balloonMaterials'
+import { preloadWatermelonArt } from './objects/watermelon'
 import { paintLayer } from './objects/paintBalloon'
 import { setupObjectPicker } from './objectPicker'
 import { getPhysicsOptions } from './objects/objectDefinitions'
@@ -5,6 +13,7 @@ import {
     containsPoint,
     defaultBalloonConfig,
     drawBalloon,
+    isBalloonFinished,
     updateBalloon
 } from './objects/balloon'
 import { popWithForce, updateBalloonPhysics, updateBreeze } from './physics'
@@ -14,6 +23,8 @@ import { BackgroundRenderer } from './theme/background'
 import { getRandomPanelColors } from './theme/colors'
 import {
     preloadSounds,
+    setBurnerSoundLevel,
+    stopBurnerSound,
     unlockAudio,
     startInflateSound,
     stopInflateSound,
@@ -33,18 +44,16 @@ function requireContext(element: HTMLCanvasElement): CanvasRenderingContext2D {
     return context
 }
 
+void preloadBalloonMaterials()
+void preloadWatermelonArt().catch(error => console.warn("Watermelon artwork failed:", error))
 const canvas = requireCanvas()
 const ctx = requireContext(canvas)
+let balloonViewActive = true
 void preloadSounds().catch(error => console.warn("Sound preload failed:", error))
 
 const isMobile = window.matchMedia('(pointer: coarse)').matches
 
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .catch(console.error)
-    })
-}
+setupAppUpdates()
 
 canvas.addEventListener('contextmenu', e => {
     e.preventDefault()
@@ -52,7 +61,12 @@ canvas.addEventListener('contextmenu', e => {
 
 const balloonConfig: BalloonConfig = {
     ...defaultBalloonConfig,
-    initialRadius: isMobile ? 35 : 60,
+    initialRadius: isMobile ? 22 : 40,
+    minRadius: isMobile ? 18 : 24,
+    maxRadius: isMobile ? 64 : 120,
+    maxRadiusScreenRatio: isMobile ? 0.16 : 0.18,
+    maxObjectAreaRatio: 0.05,
+    maxSceneAreaRatio: isMobile ? 0.65 : 0.8,
     growthRate: isMobile ? 45 : 80,
     maxScreenRatio: isMobile ? 0.65 : 1 / 2.75
 }
@@ -61,15 +75,16 @@ const balloons: Balloon[] = []
 const activePointers = new Map<number, Balloon>()
 const themeManager = new ThemeManager()
 const background = new BackgroundRenderer()
+let customBackground: string | null = null
 setupObjectPicker(themeManager)
 
 function applyTheme(): void {
     const theme = themeManager.current
     const label = document.getElementById("counter-label")
 
-    if (label) label.innerText = theme.finish == "bubble" ? "BUBBLES" : "BALLOONS"
+    if (label) label.innerText = theme.finish === "watermelon" ? "WATERMELONS" : theme.finish === "bubble" ? "BUBBLES" : "BALLOONS"
 
-    void background.setBackground(theme.theme.background)
+    void background.setBackground(customBackground ?? theme.theme.background)
 }
 
 applyTheme()
@@ -78,6 +93,7 @@ themeManager.subscribe(applyTheme)
 
 let width = 0
 let height = 0
+let groundY = 0
 let previousCount = -1
 let lastTime = 0
 
@@ -90,7 +106,7 @@ let resetting = false
 
 
 const counterEl = document.getElementById('counter')
-counterEl?.addEventListener('click', () => {
+if (counterEl) bindActivation(counterEl, () => {
     let enabled = false
     const Orientation = DeviceOrientationEvent as typeof DeviceOrientationEvent & {
         requestPermission?: () => Promise<string>
@@ -129,7 +145,15 @@ let currentDpr = 0
 let currentPixelWidth = 0
 let currentPixelHeight = 0
 
+function syncGround(): void {
+    const state = sceneGround(height, balloons)
+    groundY = state.y
+    const ground = document.getElementById('ground')
+    if (ground) { ground.hidden = !state.visible; ground.style.height = `${height - groundY}px` }
+}
+
 function resize(): void {
+    if (!balloonViewActive) return
     const rect = canvas.getBoundingClientRect()
 
     const nextWidth = rect.width
@@ -154,6 +178,7 @@ function resize(): void {
 
     width = nextWidth
     height = nextHeight
+    syncGround()
 
     canvas.width = pixelWidth
     canvas.height = pixelHeight
@@ -171,7 +196,9 @@ function resize(): void {
 
 function reset(): void {
     paintLayer.clear()
+    stopBurnerSound()
     balloons.length = 0
+    syncGround()
     activePointers.clear()
     stopInflateSound()
     updateCounter()
@@ -213,9 +240,7 @@ function updateReset(dt: number): void {
         }
     }
 
-    if (resetQueue.length === 0 && balloons.every(balloon =>
-        balloon.popped && balloon.popTime >= balloonConfig.popDuration
-    )) {
+    if (resetQueue.length === 0 && balloons.every(balloon => isBalloonFinished(balloon, balloonConfig))) {
         reset()
         resetting = false
     }
@@ -228,26 +253,33 @@ function updateCounter(): void {
 }
 
 function update(dt: number): void {
+    syncGround()
+    enforceSizeLimits(balloons, width, groundY, balloonConfig)
     updateReset(dt)
 
     for (const balloon of balloons) {
-        updateBalloon(balloon, dt, width, height, balloonConfig, balloons)
+        updateBalloon(balloon, dt, width, groundY, balloonConfig, balloons)
     }
 
-    updateBalloonPhysics(balloons, dt, width, height, balloonConfig)
+    updateBalloonPhysics(balloons, dt, width, groundY, balloonConfig)
 
     for (let i = balloons.length - 1; i >= 0; i--) {
         const balloon = balloons[i]
 
         if (
-            balloon.popped &&
-            balloon.popTime >= balloonConfig.popDuration
+            isBalloonFinished(balloon, balloonConfig)
         ) {
             balloons.splice(i, 1)
         }
     }
+    syncGround()
     updateCounter()
     syncInflateSound()
+    let burnerIntensity = 0
+    if (!document.hidden) {
+        for (const balloon of balloons) if (!balloon.popped) burnerIntensity += balloon.burner?.intensity ?? 0
+    }
+    setBurnerSoundLevel(burnerIntensity)
 }
 
 // function render(): void {
@@ -276,6 +308,11 @@ let profileRender = 0
 let profileStart = performance.now()
 
 function frame(time: number): void {
+    if (!balloonViewActive || document.hidden) {
+        lastTime = 0
+        requestAnimationFrame(frame)
+        return
+    }
     if (lastTime === 0) lastTime = time
 
     const dt = Math.min((time - lastTime) / 1000, 1 / 30)
@@ -328,6 +365,7 @@ function canvasPosition(
 canvas.addEventListener('contextmenu', event => event.preventDefault())
 
 let runAudioInit = true
+const basketDrags = new Map<number, { x: number, y: number }>()
 
 canvas.addEventListener('pointerdown', event => {
     if (runAudioInit) {
@@ -346,6 +384,16 @@ canvas.addEventListener('pointerdown', event => {
         if (!containsPoint(balloon, x, y)) continue
         // A balloon being inflated by another pointer is not popped.
         if (balloon.pointerId !== null) return
+        if (balloon.finish === 'hot-air' && containsBasketPoint(balloon, x, y)) {
+            balloon.pointerId = event.pointerId
+            balloon.growing = false
+            balloon.anchorX = balloon.x
+            balloon.anchorY = balloon.y
+            basketDrags.set(event.pointerId, { x, y })
+            activePointers.set(event.pointerId, balloon)
+            canvas.setPointerCapture(event.pointerId)
+            return
+        }
         popWithForce(balloons, balloon)
         return
     }
@@ -358,11 +406,11 @@ canvas.addEventListener('pointerdown', event => {
         vy: 0,
         anchorX: x,
         anchorY: y,
-        radius: balloonConfig.initialRadius,
+        radius: themeManager.current.finish === "watermelon" ? (isMobile ? 30 : 42) : balloonConfig.initialRadius,
         color: themeManager.randomBalloonColor(),
         panelColors: getRandomPanelColors(themeManager.current.theme, Math.max(1, Math.floor(Math.random() * 5))),
         finish: themeManager.current.finish,
-        angle: Math.random() * Math.PI * 2,
+        angle: themeManager.current.finish === "hot-air" ? 0 : Math.random() * Math.PI * 2,
         angularVelocity: 0,
         growing: true,
         popped: false,
@@ -370,10 +418,16 @@ canvas.addEventListener('pointerdown', event => {
     }
 
 
+    const maxSize = maximumRadius(width, groundY, balloonConfig)
+    const room = availableRadius(balloon, balloons, width, groundY, balloonConfig)
+    const minimum = Math.min(balloonConfig.minRadius ?? balloonConfig.initialRadius, maxSize)
+    if (room < minimum || maxSize <= 0) return
+    balloon.radius = Math.max(minimum, Math.min(balloon.radius, maxSize, room))
     balloons.push(balloon)
+    syncGround()
     activePointers.set(event.pointerId, balloon)
     canvas.setPointerCapture(event.pointerId)
-    if (activePointers.size === 1) startInflateSound(balloon.finish)
+    if (activePointers.size === 1 && balloon.finish !== "watermelon") startInflateSound(balloon.finish)
     updateCounter()
 })
 
@@ -382,6 +436,13 @@ canvas.addEventListener('pointermove', event => {
     try {
         if (!balloon || balloon.popped) return
         const { x, y } = canvasPosition(event)
+        const drag = basketDrags.get(event.pointerId)
+        if (drag) {
+            moveHotAirAssembly(balloon, x - drag.x, y - drag.y)
+            drag.x = x
+            drag.y = y
+            return
+        }
         balloon.anchorX = x
         balloon.anchorY = y
     } catch {
@@ -394,13 +455,14 @@ canvas.addEventListener('pointermove', event => {
 })
 
 function releaseBalloon(pointerId: number): void {
+    const basketDrag = basketDrags.delete(pointerId)
     const balloon = activePointers.get(pointerId)
     if (!balloon) return
     activePointers.delete(pointerId)
     balloon.pointerId = null
     balloon.growing = false
 
-    if (!balloon.popped) {
+    if (!balloon.popped && !basketDrag) {
         const angle = Math.random() * Math.PI * 2
         const { releaseImpulse } = getPhysicsOptions(balloon, balloonConfig)
         const impulse = Math.max(releaseImpulse / 2, releaseImpulse * (0.9 + Math.random() * 0.5))
@@ -417,6 +479,7 @@ let lastInflateFinish: BalloonFinish | null = null
 function syncInflateSound(): void {
     const balloon = balloons.find(
         balloon =>
+            balloon.finish !== "watermelon" &&
             balloon.growing &&
             !balloon.popped &&
             balloon.pointerId !== null
@@ -445,6 +508,7 @@ function syncInflateSound(): void {
 
 function stopInflateSoundFactory() {
     return () => {
+        stopBurnerSound()
         stopInflateSound(activePointers)
     }
 }
@@ -469,9 +533,37 @@ window.visualViewport?.addEventListener(
     'resize',
     resize
 )
-document.getElementById('reset')?.addEventListener('click', resetBalloons)
+const resetButton = document.getElementById('reset')
+if (resetButton) bindActivation(resetButton, resetBalloons)
+const sketchLink = document.querySelector<HTMLAnchorElement>('.sketch-button')
+if (sketchLink) bindActivation(sketchLink)
 // background.addEventListener('load', drawBackground)
 // background.src = '/bg.png'
+setupWorkspace({
+    setAuto() { themeManager.setMode('auto') },
+    setSimpleMode(enabled) { themeManager.setSimpleMode(enabled) },
+    showBalloons(active) {
+        if (!active) {
+            for (const pointerId of [...activePointers.keys()]) {
+                releaseBalloon(pointerId)
+                if (canvas.hasPointerCapture(pointerId)) canvas.releasePointerCapture(pointerId)
+            }
+            stopInflateSound()
+            stopBurnerSound()
+            lastInflating = false
+            lastInflateFinish = null
+        }
+        balloonViewActive = active
+        lastTime = 0
+        profileStart = performance.now()
+        profileFrames = profileUpdate = profileRender = 0
+        if (active) resize()
+    },
+    async setBackground(url) {
+        customBackground = url
+        await background.setBackground(url ?? themeManager.current.theme.background)
+    }
+})
 resize()
 updateCounter()
 requestAnimationFrame(frame)

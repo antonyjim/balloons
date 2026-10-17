@@ -22,7 +22,7 @@ function validThemeMode(value: string | null): ThemeMode {
 }
 
 function validFinishMode(value: string | null): FinishMode {
-    return value === 'latex' || value === 'hot-air' || value === 'bubble' || value === 'paint'
+    return value === 'latex' || value === 'hot-air' || value === 'bubble' || value === 'paint' || value === 'watermelon'
         ? value
         : 'auto'
 }
@@ -35,12 +35,14 @@ export class ThemeManager {
     private state: ThemeState
     private randomFinish: BalloonFinish = 'latex'
     private nextFinishChange = 0
+    private simpleMode = false
 
     private readonly finishes: BalloonFinish[] = [
         'latex',
         'hot-air',
         'bubble',
-        'paint'
+        'paint',
+        'watermelon'
     ]
     private readonly handleVisibility = () => this.refresh()
 
@@ -100,6 +102,12 @@ export class ThemeManager {
         this.refresh()
     }
 
+    setSimpleMode(enabled: boolean): void {
+        this.simpleMode = enabled
+        if (enabled && this.randomFinish === 'watermelon') this.nextFinishChange = 0
+        this.refresh()
+    }
+
     randomBalloonColor(): string {
         const finish = this.state.finish
 
@@ -121,14 +129,14 @@ export class ThemeManager {
         if (now < this.nextFinishChange) return
 
         const options = this.finishes.filter(
-            finish => finish !== this.randomFinish
+            finish => finish !== this.randomFinish && (!this.simpleMode || finish !== 'watermelon')
         )
 
         this.randomFinish = options[
             Math.floor(Math.random() * options.length)
         ]
 
-        this.nextFinishChange = now + 10 * 60 * 1000
+        this.nextFinishChange = now + 60 * 1000
     }
 
     destroy(): void {

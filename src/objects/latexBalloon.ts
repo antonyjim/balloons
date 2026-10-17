@@ -1,3 +1,4 @@
+import { drawBalloonMaterial } from './balloonMaterials'
 import type { PhysicsOptions } from "./physicsOptions"
 import type { Balloon } from "./balloonTypes"
 
@@ -217,6 +218,7 @@ export function drawLatexVector(
     ctx.fillStyle = lower
     ctx.fillRect(-r, 0, r * 2, r)
 
+    drawBalloonMaterial(ctx, 'latex', r)
     ctx.restore()
 
     // --------------------------------------------------

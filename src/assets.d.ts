@@ -14,3 +14,5 @@ declare module '*.ogg' {
     const url: string
     export default url
 }
+declare module 'sketchpad-markup' { const value: string; export default value }
+declare module 'sketchpad-styles' { const value: string; export default value }

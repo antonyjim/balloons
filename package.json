@@ -10,7 +10,9 @@
     "dev:ts": "tsc --watch --preserveWatchOutput",
     "dev:webpack": "webpack serve --mode development",
     "dev": "concurrently \"npm:dev:ts\" \"npm:dev:webpack\"",
-    "build": "tsc && webpack --mode production"
+    "build": "tsc && webpack --mode production",
+    "test": "tsc && node --test tests/*.cjs",
+    "benchmark:physics": "tsc && node scripts/benchmark-physics.cjs"
   },
   "devDependencies": {
     "concurrently": "^10.0.4",

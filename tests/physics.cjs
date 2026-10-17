@@ -52,3 +52,17 @@ test('broad phase finds collisions with expanded instance bounds', () => {
     resolveBalloonCollisions([a, b], defaultBalloonConfig)
     assert.ok(Math.abs((b.x - a.x) - 123) < 1e-8)
 })
+
+test('shared type settings refresh between steps without overriding instance settings', () => {
+    const a = balloon({ pointerId: 1, anchorX: 600, physics: { anchorStrength: 0 } })
+    const b = balloon({ pointerId: 2, anchorX: 600, y: 700, anchorY: 700 })
+    const c = balloon({ pointerId: 3, anchorX: 600, y: 900, anchorY: 900, finish: 'bubble' })
+    const config = { ...defaultBalloonConfig, anchorStrength: 0 }
+    updateBalloonPhysics([a, b, c], 0.1, 2000, 2000, config)
+    assert.equal(b.x, 500)
+    config.anchorStrength = 20
+    updateBalloonPhysics([a, b, c], 0.1, 2000, 2000, config)
+    assert.equal(a.x, 500)
+    assert.ok(b.x > 580)
+    assert.equal(b.x, c.x)
+})

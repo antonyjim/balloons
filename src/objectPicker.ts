@@ -1,3 +1,4 @@
+import { bindActivation } from './activation'
 import type { ThemeManager } from './theme/ThemeManager'
 import type { FinishMode } from './theme/types'
 
@@ -27,9 +28,9 @@ export function setupObjectPicker(manager: ThemeManager): void {
         trigger.setAttribute('aria-label', label)
         trigger.title = label
     })
-    trigger.addEventListener('click', () => menu.hidden ? open() : close())
+    bindActivation(trigger, () => menu.hidden ? open() : close())
     for (const item of items) {
-        item.addEventListener('click', () => {
+        bindActivation(item, () => {
             manager.setFinish(item.dataset.finish as FinishMode)
             close(true)
         })

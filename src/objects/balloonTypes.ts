@@ -3,6 +3,10 @@ import { BalloonFinish } from "../theme/types"
 import type { InteractiveObject, PopState } from "./objectTypes"
 
 export interface Balloon extends InteractiveObject, PopState {
+    watermelon?: import("./watermelon").WatermelonState
+    fire?: import("./hotAirFire").HotAirFireState
+    burner?: import("./hotAirBalloon").BurnerState
+    suspension?: import("./hotAirBalloon").SuspendedBasket
     radius: number
     color: string
     panelColors?: string[]
@@ -14,6 +18,11 @@ export interface BalloonConfig extends Partial<PhysicsOptions> {
     initialRadius: number
     growthRate: number
     maxScreenRatio: number
+    minRadius?: number
+    maxRadius?: number
+    maxRadiusScreenRatio?: number
+    maxObjectAreaRatio?: number
+    maxSceneAreaRatio?: number
 
     popAtMax: boolean
     popDuration: number

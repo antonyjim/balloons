@@ -15,11 +15,15 @@
 
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 
-    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v2.png">
     <link rel="icon" href="/favicon.ico">
     <title>Balloons</title>
 
     <style>
+        .simple-mode .counter-card,
+        .simple-mode .sketch-button,
+        .simple-mode #object-picker,
+        .simple-mode .background-picker { display: none !important; }
         * {
             box-sizing: border-box;
         }
@@ -48,12 +52,30 @@
             background: transparent
         }
 
+        [hidden] { display: none !important; }
+        #sketchpad-view { position: fixed; inset: 0; z-index: 20; }
+
         #background {
             position: fixed;
             inset: 0;
             z-index: 0;
             pointer-events: none;
             overflow: hidden;
+        }
+
+        #ground {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: clamp(36px, 8vh, 72px);
+            z-index: 0;
+            pointer-events: none;
+            background-color: #665338;
+            background-image: url('/textures/ground.png');
+            background-repeat: repeat-x;
+            background-size: auto calc(100% + 5px);
+            background-position: left -5px;
         }
 
         #app {
@@ -74,7 +96,7 @@
             max-width: calc(100vw - 32px);
             gap: 10px;
             z-index: 10;
-            /* pointer-events: none; */
+            touch-action: none;
             user-select: none;
         }
 
@@ -218,6 +240,21 @@
             text-decoration: none;
         }
 
+        .background-picker { position: relative; }
+        #background-toggle { width: 44px; padding: 0; }
+        #background-menu {
+            position: absolute; top: calc(100% + 10px); right: 0;
+            width: min(260px, calc(100vw - 32px)); padding: 10px; border: 1px solid #e4ddfa;
+            border-radius: 14px; background: white; color: #4930b0;
+            box-shadow: 0 8px 28px rgba(49,27,112,.2);
+        }
+        #background-menu button { width: 100%; min-height: 40px; padding: 8px; background: #f4f0ff; border: 0; border-radius: 8px; color: inherit; cursor: pointer; font: inherit; font-size: 13px; margin-bottom: 5px; }
+        #background-menu button:disabled { opacity: .45; cursor: default; }
+        #background-menu button:focus-visible { outline: 2px solid #6246ea; }
+        #background-menu .sky-options { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+        #background-menu img { display: block; width: 100%; height: 48px; object-fit: cover; border-radius: 5px; margin-bottom: 4px; }
+        #background-menu small, #background-status { display: block; font-size: 12px; line-height: 1.5; }
+
         .sketch-button { text-decoration: none; }
 
         .sketch-button svg {
@@ -250,7 +287,9 @@
 </head>
 
 <body>
+    <main id="balloons-view" class="simple-mode">
     <div id="background"></div>
+    <div id="ground" aria-hidden="true" hidden></div>
     <canvas id="app"></canvas>
 
     <div class="overlay">
@@ -260,7 +299,7 @@
         </div>
 
         <div class="card reset-card">
-            <a class="action-button sketch-button" href="https://sketchpad.anthonyjund.com" aria-label="Open drawing canvas">
+            <a class="action-button sketch-button" href="#/sketchpad" aria-label="Open drawing canvas">
                 <svg viewBox="0 0 24 24">
                     <path d="M12 19l-7 2 2-7L17 4a2.8 2.8 0 0 1 4 4L12 19Z" />
                     <path d="m15 6 3 3" />
@@ -289,8 +328,40 @@
                     <button type="button" role="menuitemradio" aria-checked="false" data-finish="paint" tabindex="-1">
                         <img src="/icons/objects/paint.svg" width="26" height="28" alt="">Paint balloons
                     </button>
+                    <button type="button" role="menuitemradio" aria-checked="false" data-finish="watermelon" tabindex="-1">
+                        <img src="/icons/objects/watermelon.svg" width="26" height="28" alt="">Watermelons
+                    </button>
                 </div>
             </div>
+            <div class="background-picker">
+                <button id="background-toggle" class="action-button" type="button" aria-label="Choose background"
+                    title="Choose background" aria-expanded="false" aria-controls="background-menu">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                        <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="2"/><path d="m3 17 5-5 4 4 3-6 6 7"/>
+                    </svg>
+                </button>
+                <div id="background-menu" role="dialog" aria-label="Scene background" hidden>
+                    <button type="button" data-background="auto">Automatic sky</button>
+                    <div class="sky-options">
+                        <button type="button" data-background="dawn"><img src="/backgrounds/dawn.webp" alt="">Dawn</button>
+                        <button type="button" data-background="day"><img src="/backgrounds/day.webp" alt="">Day</button>
+                        <button type="button" data-background="sunset"><img src="/backgrounds/sunset.webp" alt="">Sunset</button>
+                        <button type="button" data-background="night"><img src="/backgrounds/night.webp" alt="">Night</button>
+                    </div>
+                    <button id="drawing-background" type="button" disabled>Use your drawing</button>
+                    <button id="upload-background" type="button" style="display: none">Choose image?</button>
+                    <small>Use a photo or a generated background.</small>
+                    <button id="simple-mode" type="button">Simple mode</button>
+                    <button id="app-update" type="button" hidden>Update available - Reload</button>
+                    <span id="background-status" role="status"></span>
+                </div>
+                <input id="background-file" type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/gif" hidden>
+            </div>
+            <button id="exit-simple-mode" class="action-button" type="button" aria-label="Exit simple mode and show controls" title="Show controls">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
             <button id="reset" class="action-button" type="button">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -302,6 +373,8 @@
         </div>
     </div>
 
+    </main>
+    <section id="sketchpad-view" aria-label="Sketchpad" hidden></section>
     <script src="/app.js"></script>
 </body>
 
