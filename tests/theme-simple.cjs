@@ -33,4 +33,13 @@ test('simple mode excludes watermelon immediately and throughout automatic rotat
     assert.equal(manager.current.finish, 'watermelon')
     manager.setFinish('watermelon')
     assert.equal(manager.current.finish, 'watermelon')
+    assert.equal(manager.finishForPointer(), 'watermelon')
+    manager.setFinish('random')
+    context.Math.random = () => 0
+    assert.equal(manager.finishForPointer(), 'latex')
+    context.Math.random = () => 0.999
+    assert.equal(manager.finishForPointer(), 'watermelon')
+    assert.equal(manager.current.finishMode, 'random')
+    manager.setSimpleMode(true)
+    assert.notEqual(manager.finishForPointer(), 'watermelon')
 })

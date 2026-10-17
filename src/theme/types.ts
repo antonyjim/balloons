@@ -9,7 +9,7 @@ export type BalloonFinish =
     | 'duck'
 
 export type ThemeMode = 'auto' | ThemeId
-export type FinishMode = 'auto' | BalloonFinish
+export type FinishMode = 'auto' | 'random' | BalloonFinish
 
 export interface Theme {
     id: ThemeId

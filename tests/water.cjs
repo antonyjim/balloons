@@ -12,6 +12,24 @@ function body(finish, x = 300, y = 100) {
 function simulate(objects, seconds = 10) {
     for (let i = 0; i < seconds * 120; i++) updateBalloonPhysics(objects, 1/120, 1000, 728, config)
 }
+test('floating birds rock gently as waves pass and held birds stay under pointer control', () => {
+    for (const duckVariant of ['duck', 'goose']) {
+        const duck = body('duck', 200, 510)
+        duck.duckVariant = duckVariant
+        let min = Infinity, max = -Infinity
+        for (let i = 0; i < 720; i++) {
+            updateBalloonPhysics([duck], 1/120, 2000, 728, config)
+            min = Math.min(min, duck.angle)
+            max = Math.max(max, duck.angle)
+        }
+        assert.ok(max - min > 0.025)
+        assert.ok(Math.max(Math.abs(min), Math.abs(max)) < 0.3)
+        duck.pointerId = 1
+        const angle = duck.angle
+        simulate([duck], 1)
+        assert.equal(duck.angle, angle)
+    }
+})
 test('holding new ducks and geese grows them to the size limit; releasing preserves their size', () => {
     for (const duckVariant of ['duck', 'goose']) {
         const duck = body('duck')

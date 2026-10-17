@@ -22,7 +22,7 @@ function validThemeMode(value: string | null): ThemeMode {
 }
 
 function validFinishMode(value: string | null): FinishMode {
-    return value === 'latex' || value === 'hot-air' || value === 'bubble' || value === 'paint' || value === 'watermelon' || value === 'apple' || value === 'duck'
+    return value === 'random' || value === 'latex' || value === 'hot-air' || value === 'bubble' || value === 'paint' || value === 'watermelon' || value === 'apple' || value === 'duck'
         ? value
         : 'auto'
 }
@@ -68,7 +68,7 @@ export class ThemeManager {
             mode: this.mode,
             finishMode: this.finishMode,
             theme,
-            finish: this.finishMode === 'auto' ? this.randomFinish : this.finishMode
+            finish: this.finishMode === 'auto' || this.finishMode === 'random' ? this.randomFinish : this.finishMode
         }
     }
 
@@ -110,8 +110,13 @@ export class ThemeManager {
         this.refresh()
     }
 
-    randomBalloonColor(): string {
-        const finish = this.state.finish
+    finishForPointer(): BalloonFinish {
+        if (this.finishMode !== 'random') return this.state.finish
+        const options = this.finishes.filter(finish => !this.simpleMode || finish !== 'watermelon')
+        return options[Math.floor(Math.random() * options.length)]
+    }
+
+    randomBalloonColor(finish = this.state.finish): string {
 
         const variation = finish === 'hot-air'
             ? { hue: 18, saturation: 15, lightness: 12 }

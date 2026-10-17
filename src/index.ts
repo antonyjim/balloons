@@ -1,5 +1,5 @@
 import { randomDuckAppearance } from './objects/duck'
-import { drawWater, waterSurface } from './water'
+import { drawWater, waterSurface, waterTime } from './water'
 import { setupWorkspace } from './workspace'
 import { resetPopsDue, RESET_DEADLINE_SECONDS } from './resetTiming'
 import { maximumRadius, availableRadius, enforceSizeLimits } from './objects/sizeLimits'
@@ -25,6 +25,7 @@ import { BalloonFinish, ThemeManager } from './theme/ThemeManager'
 import { BackgroundRenderer } from './theme/background'
 import { getRandomPanelColors } from './theme/colors'
 import {
+    playDuckCall,
     preloadSounds,
     setBurnerSoundLevel,
     stopBurnerSound,
@@ -84,7 +85,7 @@ function applyTheme(): void {
     const theme = themeManager.current
     const label = document.getElementById("counter-label")
 
-    if (label) label.innerText = theme.finish === "duck" ? "RUBBER DUCKS" : theme.finish === "apple" ? "APPLES" : theme.finish === "watermelon" ? "WATERMELONS" : theme.finish === "bubble" ? "BUBBLES" : "BALLOONS"
+    if (label) label.innerText = theme.finishMode === "random" ? "OBJECTS" : theme.finish === "duck" ? "RUBBER DUCKS" : theme.finish === "apple" ? "APPLES" : theme.finish === "watermelon" ? "WATERMELONS" : theme.finish === "bubble" ? "BUBBLES" : "BALLOONS"
 
     void background.setBackground(customBackground ?? theme.theme.background)
 }
@@ -301,12 +302,12 @@ function render(): void {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     paintLayer.draw(ctx, width, height, currentDpr)
     const surface = waterSurface(groundY, balloons)
-    drawWater(ctx, width, groundY, surface, performance.now() / 1000)
+    drawWater(ctx, width, groundY, surface, waterTime())
 
     for (const balloon of balloons) {
         drawBalloon(ctx, balloon)
     }
-    drawWater(ctx, width, groundY, surface, performance.now() / 1000, true)
+    drawWater(ctx, width, groundY, surface, waterTime(), true)
 
 }
 
@@ -404,6 +405,7 @@ canvas.addEventListener('pointerdown', event => {
             return
         }
         if ((balloon.finish === 'apple' || balloon.finish === 'duck')) {
+            if (balloon.finish === 'duck') playDuckCall(balloon.duckVariant === 'goose')
             sampleAppleDrag(balloon, x, y, event.timeStamp)
             balloon.pointerId = event.pointerId
             balloon.anchorX = balloon.x
@@ -416,6 +418,7 @@ canvas.addEventListener('pointerdown', event => {
         return
     }
 
+    const finish = themeManager.finishForPointer()
     const balloon: Balloon = {
         pointerId: event.pointerId,
         x,
@@ -424,13 +427,13 @@ canvas.addEventListener('pointerdown', event => {
         vy: 0,
         anchorX: x,
         anchorY: y,
-        radius: themeManager.current.finish === "duck" ? (isMobile ? 30 : 42) : themeManager.current.finish === "apple" ? (isMobile ? 23 : 30) : themeManager.current.finish === "watermelon" ? (isMobile ? 30 : 42) : balloonConfig.initialRadius,
-        color: themeManager.randomBalloonColor(),
+        radius: finish === "duck" ? (isMobile ? 30 : 42) : finish === "apple" ? (isMobile ? 23 : 30) : finish === "watermelon" ? (isMobile ? 30 : 42) : balloonConfig.initialRadius,
+        color: themeManager.randomBalloonColor(finish),
         panelColors: getRandomPanelColors(themeManager.current.theme, Math.max(1, Math.floor(Math.random() * 5))),
-        finish: themeManager.current.finish,
-        angle: (themeManager.current.finish === "hot-air" || themeManager.current.finish === "duck") ? 0 : Math.random() * Math.PI * 2,
+        finish,
+        angle: (finish === "hot-air" || finish === "duck") ? 0 : Math.random() * Math.PI * 2,
         angularVelocity: 0,
-        growing: themeManager.current.finish !== "apple",
+        growing: finish !== "apple",
         popped: false,
         popTime: 0
     }

@@ -229,6 +229,35 @@ export function playPopSound(finish: BalloonFinish = 'latex'): void {
         .catch(error => console.warn('Pop audio failed:', error))
 }
 
+/** A short nasal call when a bird is pressed; no extra sound download. */
+export function playDuckCall(goose = false): void {
+    const ctx = context
+    if (!ctx || ctx.state !== 'running') return
+    const start = ctx.currentTime
+    const source = ctx.createOscillator()
+    const filter = ctx.createBiquadFilter()
+    const gain = ctx.createGain()
+    source.type = 'sawtooth'
+    filter.type = 'bandpass'
+    filter.frequency.value = goose ? 750 : 1200
+    filter.Q.value = 2.5
+    const pitch = goose ? 165 : 270
+    source.frequency.setValueAtTime(pitch * 1.3, start)
+    source.frequency.exponentialRampToValueAtTime(pitch, start + 0.06)
+    source.frequency.exponentialRampToValueAtTime(pitch * 0.65, start + 0.24)
+    gain.gain.setValueAtTime(0, start)
+    gain.gain.linearRampToValueAtTime(0.22, start + 0.015)
+    gain.gain.linearRampToValueAtTime(0.12, start + 0.09)
+    gain.gain.linearRampToValueAtTime(0.19, start + 0.13)
+    gain.gain.linearRampToValueAtTime(0, start + 0.26)
+    source.connect(filter)
+    filter.connect(gain)
+    gain.connect(ctx.destination)
+    source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect() }
+    source.start(start)
+    source.stop(start + 0.28)
+}
+
 export function suspendSounds(): void {
     stopInflateSound()
     stopBurnerSound()

@@ -1,4 +1,4 @@
-import { applyWater, waterSurface } from './water'
+import { applyWater, waterSurface, advanceWater } from './water'
 import { getWatermelonToughness } from './objects/watermelon'
 import { updateBubbleMotion, disturbBubble, bubbleRadiusAt } from './objects/bubble'
 import { shouldIgniteHotAir } from './objects/hotAirFire'
@@ -114,6 +114,7 @@ export function updateBalloonPhysics(
     if (dt <= 0) return
 
     ambientTime += dt
+    advanceWater(dt)
     updateDeviceMotion(dt)
 
     const options = collectOptions(balloons, config) as Map<Balloon, Readonly<PhysicsOptions>>

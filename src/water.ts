@@ -1,6 +1,13 @@
 import type { Balloon } from './objects/balloonTypes'
 
 const CURRENT_SPEED = 28
+let waveTime = 0
+export function advanceWater(dt: number): void { waveTime += dt }
+export function waterTime(): number { return waveTime }
+export function waveHeight(x: number, time: number): number {
+    return Math.sin((x - time * CURRENT_SPEED) * 0.035) * 3
+        + Math.sin(x * 0.021 - time * 1.65) * 2
+}
 
 export function waterSurface(ground: number, objects: readonly Balloon[]): number | null {
     return objects.some(object => object.finish === 'duck' && !object.popped && !object.apple?.exited)
@@ -10,7 +17,8 @@ export function waterSurface(ground: number, objects: readonly Balloon[]): numbe
 /** Ducks and apples float; dense fruit sinks through the water to the solid floor. */
 export function applyWater(object: Balloon, surface: number | null, dt: number): void {
     if (surface === null || object.popped || object.pointerId !== null) return
-    const submerged = Math.max(0, Math.min(1, (object.y + object.radius - surface) / (object.radius * 2)))
+    const localSurface = surface + waveHeight(object.x, waveTime)
+    const submerged = Math.max(0, Math.min(1, (object.y + object.radius - localSurface) / (object.radius * 2)))
     if (submerged === 0) return
     object.vx += (CURRENT_SPEED - object.vx) * (1 - Math.exp(-2 * submerged * dt))
     object.vy *= Math.exp(-5 * submerged * dt)
@@ -18,7 +26,11 @@ export function applyWater(object: Balloon, surface: number | null, dt: number):
         // Counter gravity at half immersion; additional depth provides restoring lift.
         object.vy -= 1800 * submerged * dt
         if (object.finish === 'duck') {
-            object.angularVelocity += (-object.angle * 12 - object.angularVelocity * 6) * dt
+            const halfWidth = Math.max(1, object.radius * 0.8)
+            const slope = (waveHeight(object.x + halfWidth, waveTime)
+                - waveHeight(object.x - halfWidth, waveTime)) / (2 * halfWidth)
+            const targetAngle = Math.atan(slope)
+            object.angularVelocity += ((targetAngle - object.angle) * 18 - object.angularVelocity * 4) * dt
             object.angle += object.angularVelocity * dt
         }
     }
@@ -30,7 +42,7 @@ export function drawWater(ctx: CanvasRenderingContext2D, width: number, ground: 
     ctx.beginPath()
     ctx.moveTo(0, surface)
     for (let x = 0; x <= width + 12; x += 12) {
-        ctx.lineTo(x, surface + Math.sin((x - time * CURRENT_SPEED) * 0.035) * 3)
+        ctx.lineTo(x, surface + waveHeight(x, time))
     }
     ctx.lineTo(width, ground)
     ctx.lineTo(0, ground)
@@ -40,7 +52,7 @@ export function drawWater(ctx: CanvasRenderingContext2D, width: number, ground: 
     if (foreground) {
         ctx.beginPath()
         for (let x = 0; x <= width + 12; x += 12) {
-            const y = surface + Math.sin((x - time * CURRENT_SPEED) * 0.035) * 3
+            const y = surface + waveHeight(x, time)
             if (x === 0) ctx.moveTo(x, y)
             else ctx.lineTo(x, y)
         }
