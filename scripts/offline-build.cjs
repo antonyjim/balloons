@@ -14,7 +14,10 @@ module.exports = class OfflineBuildPlugin {
         hash.update(String(process.env.FORCE_APP_UPDATE === 'true'))
         const version = hash.digest('hex').slice(0, 16)
         compilation.updateAsset('sw.js', new sources.RawSource(worker
-            .replace('__BUILD_VERSION__', version).replace('["__PRECACHE__"]', JSON.stringify(assets.map(asset => '/' + asset.name)))))
+            .replace('__BUILD_VERSION__', version).replace('["__PRECACHE__"]', JSON.stringify(assets.map(asset => ({
+              url: asset.name === 'index.html' ? '/' : '/' + asset.name,
+              integrity: 'sha256-' + createHash('sha256').update(asset.source.buffer()).digest('base64')
+            }))))))
         compilation.emitAsset('version.json', new sources.RawSource(JSON.stringify({
           version, forceUpdate: process.env.FORCE_APP_UPDATE === 'true'
         })))

@@ -89,6 +89,8 @@ function drawGoose(ctx: CanvasRenderingContext2D, goose: Balloon): void {
 }
 
 export function updateDuck(duck: Balloon, dt: number, width: number, ground: number, physics: Readonly<PhysicsOptions>): void {
+    const pressed = duck.pointerId !== null ? 1 : 0
+    duck.duckPress = (duck.duckPress ?? 0) + (pressed - (duck.duckPress ?? 0)) * (1 - Math.exp(-12 * dt))
     const flight = duck.duckFlight ??= { age: 0, delay: 30 + Math.random() * 15, flying: false, elapsed: 0, direction: Math.random() < 0.5 ? -1 : 1 }
     flight.age += dt
     if (!flight.flying && flight.age >= flight.delay && duck.pointerId === null) {

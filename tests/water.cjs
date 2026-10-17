@@ -15,6 +15,21 @@ function body(finish, x = 300, y = 100) {
 function simulate(objects, seconds = 10) {
     for (let i = 0; i < seconds * 120; i++) updateBalloonPhysics(objects, 1/120, 1000, 728, config)
 }
+test('bird press feedback stays while held and eases away without changing physical size', () => {
+    const duck = body('duck')
+    duck.duckPress = 1
+    duck.pointerId = 1
+    const physics = getPhysicsOptions(duck)
+    updateDuck(duck, 0.1, 1000, 728, physics)
+    assert.equal(duck.duckPress, 1)
+    assert.equal(duck.radius, 35)
+    duck.pointerId = null
+    updateDuck(duck, 0.05, 1000, 728, physics)
+    assert.ok(duck.duckPress > 0 && duck.duckPress < 1)
+    for (let i = 0; i < 60; i++) updateDuck(duck, 1/60, 1000, 728, physics)
+    assert.ok(duck.duckPress < 0.001)
+    assert.equal(duck.radius, 35)
+})
 test('birds choose a 30–45 second stay and then fly up and out, waiting for release', () => {
     const duck = body('duck', 400, 500)
     const physics = getPhysicsOptions(duck)

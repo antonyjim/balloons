@@ -158,6 +158,14 @@ export function drawBalloon(
     // Bubble reflections stay anchored to the light rather than snapping to
     // each collision normal or spinning with rigid-body angular impulses.
     ctx.rotate(finish === 'bubble' ? 0 : balloon.angle)
+    if (finish === 'duck') {
+        const press = balloon.duckPress ?? 0
+        ctx.scale(1 - press * 0.08, 1 - press * 0.16)
+        if (press > 0.01) {
+            ctx.shadowColor = `rgba(255,239,155,${press * 0.85})`
+            ctx.shadowBlur = balloon.radius * 0.4 * press
+        }
+    }
     ctx.drawImage(
         sprite.canvas,
         sprite.sourceX, sprite.sourceY, sprite.sourceWidth, sprite.sourceHeight,

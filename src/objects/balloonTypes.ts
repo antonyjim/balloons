@@ -6,6 +6,7 @@ export interface Balloon extends InteractiveObject, PopState {
     waterEscape?: boolean
     duckFlight?: { age: number; delay: number; flying: boolean; elapsed: number; direction: number }
     duckVariant?: 'duck' | 'goose'
+    duckPress?: number
     apple?: { exited: boolean }
     bubbleMotion?: import('./bubble').BubbleMotion
     watermelon?: import("./watermelon").WatermelonState

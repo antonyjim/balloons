@@ -410,7 +410,10 @@ canvas.addEventListener('pointerdown', event => {
             return
         }
         if ((balloon.finish === 'apple' || balloon.finish === 'duck')) {
-            if (balloon.finish === 'duck') playDuckCall(balloon.duckVariant === 'goose')
+            if (balloon.finish === 'duck') {
+                balloon.duckPress = 1
+                playDuckCall(balloon.duckVariant === 'goose')
+            }
             sampleAppleDrag(balloon, x, y, event.timeStamp)
             balloon.pointerId = event.pointerId
             balloon.anchorX = balloon.x
