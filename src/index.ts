@@ -1,4 +1,5 @@
 import { setupWorkspace } from './workspace'
+import { resetPopsDue, RESET_DEADLINE_SECONDS } from './resetTiming'
 import { maximumRadius, availableRadius, enforceSizeLimits } from './objects/sizeLimits'
 import { setupAppUpdates } from './appUpdates'
 import { containsBasketPoint, moveHotAirAssembly } from './objects/hotAirBalloon'
@@ -98,10 +99,9 @@ let previousCount = -1
 let lastTime = 0
 
 // For popping balloons sequentially when reset is pressed
-const RESET_POP_INTERVAL = 0.075
-
 let resetQueue: Balloon[] = []
-let resetElapsed = 0
+let resetStartedAt = 0
+let resetCount = 0
 let resetting = false
 
 
@@ -208,9 +208,10 @@ function resetBalloons(): void {
     if (resetting) return
 
     resetting = true
-    resetElapsed = 0
+    resetStartedAt = performance.now()
 
     resetQueue = balloons.filter(b => !b.popped)
+    resetCount = resetQueue.length
 
     // Randomize the popping order
     for (let i = resetQueue.length - 1; i > 0; i--) {
@@ -222,17 +223,17 @@ function resetBalloons(): void {
     }
 }
 
-function updateReset(dt: number): void {
+function updateReset(): void {
     if (!resetting) return
 
-    resetElapsed += dt
+    // Use elapsed real time, since simulation dt is capped on slow devices.
+    const elapsed = (performance.now() - resetStartedAt) / 1000
+    const due = resetPopsDue(resetCount, elapsed)
 
     while (
         resetQueue.length > 0 &&
-        resetElapsed >= RESET_POP_INTERVAL
+        resetCount - resetQueue.length < due
     ) {
-        resetElapsed -= RESET_POP_INTERVAL
-
         const balloon = resetQueue.pop()!
 
         if (!balloon.popped) {
@@ -240,7 +241,9 @@ function updateReset(dt: number): void {
         }
     }
 
-    if (resetQueue.length === 0 && balloons.every(balloon => isBalloonFinished(balloon, balloonConfig))) {
+    if (elapsed >= RESET_DEADLINE_SECONDS ||
+        (resetQueue.length === 0 && balloons.every(balloon => isBalloonFinished(balloon, balloonConfig)))) {
+        resetQueue.length = 0
         reset()
         resetting = false
     }
@@ -255,7 +258,7 @@ function updateCounter(): void {
 function update(dt: number): void {
     syncGround()
     enforceSizeLimits(balloons, width, groundY, balloonConfig)
-    updateReset(dt)
+    updateReset()
 
     for (const balloon of balloons) {
         updateBalloon(balloon, dt, width, groundY, balloonConfig, balloons)

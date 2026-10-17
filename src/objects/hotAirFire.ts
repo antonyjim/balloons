@@ -136,42 +136,60 @@ function fireSprite(frame: number): HTMLCanvasElement {
     return canvas
 }
 
-/** Continuous sheared strips share edge positions, avoiding staircase-shaped ripples. */
+let rippleCanvas: HTMLCanvasElement | null = null
+
+/** Assemble the ripple before rotating/fading, so strip edges stay off the screen. */
 export function drawBurningEnvelope(ctx: CanvasRenderingContext2D, balloon: Balloon, sprite: EnvelopeSprite): void {
     const fire = balloon.fire
     if (!fire || fire.removed) return
     const r = balloon.radius
     const collapse = Math.min(1, fire.elapsed / 5)
     const scale = r / sprite.radius
+    const buffer = rippleCanvas ??= document.createElement('canvas')
+    const padding = Math.ceil(sprite.sourceWidth * 0.1) + 4
+    const bufferWidth = sprite.sourceWidth + padding * 2
+    if (buffer.width !== bufferWidth) buffer.width = bufferWidth
+    if (buffer.height !== sprite.sourceHeight) buffer.height = sprite.sourceHeight
+    const ripple = buffer.getContext('2d')
+    if (!ripple) return
+    const sx = sprite.sourceWidth / sprite.width
+    const sy = sprite.sourceHeight / sprite.height
+    ripple.setTransform(1, 0, 0, 1, 0, 0)
+    ripple.clearRect(0, 0, buffer.width, buffer.height)
+    ripple.imageSmoothingEnabled = true
+    ripple.setTransform(sx, 0, 0, sy, padding - sprite.left * sx, -sprite.top * sy)
+    const bands = 24
+    const bandHeight = sprite.height / bands
+    const amplitude = sprite.radius * (0.025 + collapse * 0.055)
+    const phase = fire.elapsed * 8 + fire.phase
+    const sourceBandHeight = sprite.sourceHeight / bands
+    for (let i = 0; i < bands; i++) {
+        const y = sprite.top + bandHeight * i
+        const startOffset = Math.sin(phase + i / bands * 10.8) * amplitude
+        const endOffset = Math.sin(phase + (i + 1) / bands * 10.8) * amplitude
+        const shear = (endOffset - startOffset) / bandHeight
+        const translation = startOffset - shear * y
+        // Overlap two buffer pixels using matching source rows. Opacity is
+        // applied once to the assembled image, avoiding darker overlap bands.
+        const sourceY = sprite.sourceHeight * i / bands
+        const sourceHeight = Math.min(sourceBandHeight + 2, sprite.sourceHeight - sourceY)
+        ripple.save()
+        ripple.transform(1, 0, shear, 1, translation, 0)
+        ripple.drawImage(sprite.canvas,
+            sprite.sourceX, sprite.sourceY + sourceY,
+            sprite.sourceWidth, sourceHeight,
+            sprite.left, y,
+            sprite.width, sourceHeight / sprite.sourceHeight * sprite.height)
+        ripple.restore()
+    }
     ctx.save()
     ctx.translate(balloon.x, balloon.y)
     ctx.rotate(balloon.angle)
     ctx.scale(1 - collapse * 0.5, 1 - collapse * 0.2)
     ctx.globalAlpha = 1 - collapse * 0.25
     ctx.imageSmoothingEnabled = true
-    const bands = 24
-    const bandHeight = sprite.height * scale / bands
-    const amplitude = r * (0.025 + collapse * 0.055)
-    const phase = fire.elapsed * 8 + fire.phase
-    const sourceBandHeight = sprite.sourceHeight / bands
-    for (let i = 0; i < bands; i++) {
-        const y = sprite.top * scale + bandHeight * i
-        const startOffset = Math.sin(phase + i / bands * 10.8) * amplitude
-        const endOffset = Math.sin(phase + (i + 1) / bands * 10.8) * amplitude
-        const shear = (endOffset - startOffset) / bandHeight
-        const translation = startOffset - shear * y
-        // Adjacent strips meet at the same offset. A half-texel overlap hides
-        // antialiasing seams and samples the matching rows, rather than stretching them.
-        const sourceY = sprite.sourceHeight * i / bands
-        const sourceHeight = Math.min(sourceBandHeight + 0.5, sprite.sourceHeight - sourceY)
-        ctx.transform(1, 0, shear, 1, translation, 0)
-        ctx.drawImage(sprite.canvas,
-            sprite.sourceX, sprite.sourceY + sourceY,
-            sprite.sourceWidth, sourceHeight,
-            sprite.left * scale, y,
-            sprite.width * scale, sourceHeight / sprite.sourceHeight * sprite.height * scale)
-        ctx.transform(1, 0, -shear, 1, -translation, 0)
-    }
+    ctx.drawImage(buffer, (sprite.left - padding / sx) * scale, sprite.top * scale,
+        buffer.width / sx * scale, sprite.height * scale)
     ctx.restore()
     // Fire trails upward in world space, rather than rotating rigidly with the fabric.
     const ec = Math.cos(balloon.angle), es = Math.sin(balloon.angle)

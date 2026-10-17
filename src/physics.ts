@@ -1,4 +1,5 @@
 import { getWatermelonToughness } from './objects/watermelon'
+import { updateBubbleMotion, disturbBubble, bubbleRadiusAt } from './objects/bubble'
 import { shouldIgniteHotAir } from './objects/hotAirFire'
 import { updateHotAirSuspension, updateHotAirBurner, ensureSuspendedBasket } from './objects/hotAirBalloon'
 import type { PhysicsOptions } from './objects/physicsOptions'
@@ -115,6 +116,7 @@ export function updateBalloonPhysics(
     updateDeviceMotion(dt)
 
     const options = collectOptions(balloons, config)
+    for (const balloon of balloons) if (!balloon.popped && balloon.finish === 'bubble') updateBubbleMotion(balloon, dt)
     for (const balloon of balloons) {
         if (balloon.popped) continue
         const physics = options.get(balloon)!
@@ -285,7 +287,7 @@ export function resolveBalloonCollisions(
         const physics = options.get(balloon)!
         if (balloon.finish === 'watermelon') impactVelocities.set(balloon, { x: balloon.x, y: balloon.y, vx: balloon.vx, vy: balloon.vy })
         maxRadius = Math.max(maxRadius,
-            balloon.radius * physics.collisionRadiusRatio + physics.collisionPadding / 2)
+            balloon.radius * physics.collisionRadiusRatio * (balloon.finish === 'bubble' ? 1.15 : 1) + physics.collisionPadding / 2)
     }
     if (maxRadius === 0) return
 
@@ -359,8 +361,10 @@ function resolveBasketContact(owner: Balloon, other: Balloon, physics: Readonly<
     let qx = Math.max(-hw, Math.min(hw, lx)), qy = Math.max(-hh, Math.min(hh, ly))
     let nx = lx - qx, ny = ly - qy
     let distance = Math.hypot(nx, ny)
-    const radius = other.radius * otherPhysics.collisionRadiusRatio + otherPhysics.collisionPadding / 2
+    const radius = (other.finish === 'bubble' ? bubbleRadiusAt(other, Math.atan2(-dy, -dx)) : other.radius)
+        * otherPhysics.collisionRadiusRatio + otherPhysics.collisionPadding / 2
     if (distance >= radius) return
+    if (other.finish === 'bubble') { collisionBreaks.add(other); return }
     if (distance < 0.00001) {
         if (hw - Math.abs(lx) < hh - Math.abs(ly)) {
             nx = lx < 0 ? -1 : 1; ny = 0; qx = nx * hw
@@ -404,7 +408,9 @@ function resolveCollision(a: Balloon, b: Balloon, options: ReadonlyMap<Balloon, 
     let dx = b.x - a.x
     let dy = b.y - a.y
     let distSq = dx * dx + dy * dy
-    const minDistance = a.radius * aPhysics.collisionRadiusRatio + b.radius * bPhysics.collisionRadiusRatio +
+    const direction = Math.atan2(dy, dx)
+    const minDistance = (a.finish === 'bubble' ? bubbleRadiusAt(a, direction) : a.radius) * aPhysics.collisionRadiusRatio
+        + (b.finish === 'bubble' ? bubbleRadiusAt(b, direction + Math.PI) : b.radius) * bPhysics.collisionRadiusRatio +
         (aPhysics.collisionPadding + bPhysics.collisionPadding) / 2
     if (a.finish === 'watermelon' && b.finish === 'watermelon') {
         // Incoming poses and velocities preserve all contacts in a multi-melon impact.
@@ -427,6 +433,8 @@ function resolveCollision(a: Balloon, b: Balloon, options: ReadonlyMap<Balloon, 
         }
     }
     if (distSq >= minDistance * minDistance) return
+    if (a.finish === 'bubble' && b.finish === 'hot-air') { collisionBreaks.add(a); return }
+    if (b.finish === 'bubble' && a.finish === 'hot-air') { collisionBreaks.add(b); return }
 
     if (distSq < 0.000001) {
         dx = 1
@@ -437,6 +445,9 @@ function resolveCollision(a: Balloon, b: Balloon, options: ReadonlyMap<Balloon, 
     const nx = dx / distance
     const ny = dy / distance
     const penetration = Math.max(0, minDistance - distance)
+    const impact = Math.max(0, -((b.vx - a.vx) * nx + (b.vy - a.vy) * ny)) + penetration * 3
+    disturbBubble(a, nx, ny, impact)
+    disturbBubble(b, -nx, -ny, impact)
     const ac = a.pointerId !== null
     const bc = b.pointerId !== null
 

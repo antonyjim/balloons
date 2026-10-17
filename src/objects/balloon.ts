@@ -1,4 +1,5 @@
 import { drawBurningEnvelope } from './hotAirFire'
+import { bubbleFrame, bubbleRadiusAt } from './bubble'
 import { maximumRadius, availableRadius } from './sizeLimits'
 import { SpriteAtlas } from './spriteAtlas'
 import { drawSuspendedBasket, drawHotAirRigging, drawHotAirGlow, containsBasketPoint } from './hotAirBalloon'
@@ -75,6 +76,7 @@ type BalloonSprite = {
 const spriteCache = new Map<string, BalloonSprite>()
 const atlas = new SpriteAtlas()
 interface ObjectSprite {
+    bubbleFrame: number
     sprite: BalloonSprite
     revision: number
     finish: Balloon['finish']
@@ -85,6 +87,7 @@ interface ObjectSprite {
 const objectSprites = new WeakMap<Balloon, ObjectSprite>()
 
 function matchesAppearance(balloon: Balloon, cached: ObjectSprite): boolean {
+    if (balloon.finish === 'bubble' && bubbleFrame(balloon) !== cached.bubbleFrame) return false
     if (balloon.finish !== cached.finish || balloon.color !== cached.color || balloon.panelCount !== cached.panelCount) return false
     const panels = balloon.panelColors
     if (!panels || !cached.panelColors) return panels === cached.panelColors
@@ -134,7 +137,7 @@ export function drawBalloon(
             }
         }
         sprite = shared
-        objectSprites.set(balloon, { sprite, revision: definition.spriteRevision?.() ?? 0, finish: balloon.finish, color: balloon.color,
+        objectSprites.set(balloon, { sprite, bubbleFrame: bubbleFrame(balloon), revision: definition.spriteRevision?.() ?? 0, finish: balloon.finish, color: balloon.color,
             panelCount: balloon.panelCount, panelColors: balloon.panelColors?.slice() })
     }
     if (finish === 'hot-air') {
@@ -149,7 +152,9 @@ export function drawBalloon(
 
     ctx.save()
     ctx.translate(balloon.x, balloon.y)
-    ctx.rotate(balloon.angle)
+    // Bubble reflections stay anchored to the light rather than snapping to
+    // each collision normal or spinning with rigid-body angular impulses.
+    ctx.rotate(finish === 'bubble' ? 0 : balloon.angle)
     ctx.drawImage(
         sprite.canvas,
         sprite.sourceX, sprite.sourceY, sprite.sourceWidth, sprite.sourceHeight,
@@ -254,6 +259,10 @@ export function containsPoint(
         return false
     }
 
+    if (balloon.finish === 'bubble') {
+        const dx = x - balloon.x, dy = y - balloon.y
+        return Math.hypot(dx, dy) <= bubbleRadiusAt(balloon, Math.atan2(dy, dx))
+    }
     if (balloon.finish === 'hot-air' && containsBasketPoint(balloon, x, y)) return true
     const rx = balloon.radius * (getObjectDefinition(balloon.finish).hitRadiusRatio ?? 0.8)
     const ry = balloon.radius

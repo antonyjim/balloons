@@ -75,14 +75,15 @@ test('timeout removes stalled debris and ordinary pop timing is unchanged', () =
 test('rippling reuses the envelope raster and shared fire sprites', () => {
     const previous = global.document
     let created = 0
-    const raster = new Proxy({}, { get: (_, key) => {
-        if (key === 'createLinearGradient') return () => ({ addColorStop() {} })
-        return () => {}
-    } })
-    global.document = { createElement() { created++; return { getContext: () => raster } } }
     const draws = []
     const transforms = []
-    const screen = new Proxy({}, { get: (_, key) => (...args) => { if (key === 'drawImage') draws.push(args); if (key === 'transform') transforms.push(args) } })
+    const raster = new Proxy({}, { get: (_, key) => {
+        if (key === 'createLinearGradient') return () => ({ addColorStop() {} })
+        return (...args) => { if (key === 'drawImage') draws.push(args); if (key === 'transform') transforms.push(args) }
+    } })
+    global.document = { createElement() { created++; return { getContext: () => raster } } }
+    const screenDraws = []
+    const screen = new Proxy({}, { get: (_, key) => (...args) => { if (key === 'drawImage') screenDraws.push(args) } })
     try {
         const balloon = hot()
         balloon.fire = { elapsed: 1, phase: 0, detached: true, removed: false }
@@ -92,12 +93,15 @@ test('rippling reuses the envelope raster and shared fire sprites', () => {
         const initialCanvases = created
         drawBurningEnvelope(screen, balloon, sprite)
         assert.equal(created, initialCanvases, 'repeated frames reuse raster flames')
-        assert.ok(created >= 2 && created <= 5, "flames should use varied cached frames")
+        assert.ok(created >= 3 && created <= 6, "one shared ripple buffer and varied cached flames")
+        assert.equal(screenDraws.filter(args => args.length === 9).length, 0, 'individual strips never reach the screen')
+        assert.equal(screenDraws.length, 12, 'one assembled envelope and five flames per frame')
         assert.equal(draws.filter(args => args.length === 9).length, 48)
         const slices = draws.filter(args => args.length === 9).slice(0, 24)
-        const mappings = transforms.filter((_, i) => i % 2 === 0).slice(0, 24)
+        const mappings = transforms.slice(0, 24)
         assert.ok(mappings.some(mapping => Math.abs(mapping[2]) > 0.001))
         for (let i = 0; i < 23; i++) {
+            assert.ok(slices[i][6] + slices[i][8] > slices[i + 1][6], 'strips overlap in buffer pixels')
             const edgeY = slices[i + 1][6]
             const end = mappings[i][2] * edgeY + mappings[i][4]
             const next = mappings[i + 1][2] * edgeY + mappings[i + 1][4]

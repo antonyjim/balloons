@@ -1,6 +1,26 @@
 import type { PhysicsOptions } from "./physicsOptions"
 import type { Balloon } from "./balloonTypes"
 
+export interface BubbleMotion { time: number; impact: number; direction: number }
+export function updateBubbleMotion(bubble: Balloon, dt: number): void {
+    const motion = bubble.bubbleMotion ??= { time: (bubble.x + bubble.y) * 0.01, impact: 0, direction: 0 }
+    motion.time += dt
+    motion.impact *= Math.exp(-3.5 * dt)
+}
+export function disturbBubble(bubble: Balloon, nx: number, ny: number, strength: number): void {
+    if (bubble.finish !== 'bubble') return
+    const motion = bubble.bubbleMotion ??= { time: 0, impact: 0, direction: 0 }
+    motion.impact = Math.min(1, motion.impact + Math.max(0.15, strength / 250))
+    motion.direction = Math.atan2(ny, nx)
+}
+/** A small shared set of raster frames avoids rebuilding every bubble each frame. */
+export function bubbleFrame(bubble: Balloon): number {
+    const motion = bubble.bubbleMotion
+    const phase = Math.floor((motion?.time ?? 0) * 10) % 12
+    const level = (motion?.impact ?? 0) > 0.5 ? 2 : (motion?.impact ?? 0) > 0.12 ? 1 : 0
+    return level * 12 + phase
+}
+
 export function drawBubbleVector(
     ctx: CanvasRenderingContext2D,
     balloon: Balloon
@@ -20,7 +40,14 @@ export function drawBubbleVector(
     base.addColorStop(1, 'rgba(255,140,210,0.35)')
 
     ctx.beginPath()
-    ctx.arc(0, 0, r, 0, Math.PI * 2)
+    for (let i = 0; i <= 64; i++) {
+        const angle = i / 64 * Math.PI * 2
+        const radius = bubbleRadiusAt(balloon, angle)
+        const x = Math.cos(angle) * radius, y = Math.sin(angle) * radius
+        if (i === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+    }
+    ctx.closePath()
 
     ctx.fillStyle = base
     ctx.fill()
@@ -70,4 +97,15 @@ export function drawBubbleVector(
 }
 
 
-export const bubblePhysics: Readonly<Partial<PhysicsOptions>> = {}
+/** Artwork, contacts, and touch picking share the same animated radial profile. */
+export function bubbleRadiusAt(bubble: Balloon, angle: number): number {
+    const frame = bubbleFrame(bubble)
+    const phase = (frame % 12) / 12 * Math.PI * 2
+    const amplitude = 0.012 + Math.floor(frame / 12) * 0.022
+    return bubble.radius * (1 + amplitude * (Math.sin(angle * 3 + phase)
+        + 0.4 * Math.sin(angle * 5 - phase)) + amplitude * Math.cos(angle * 2) * Math.sin(phase))
+}
+
+export const bubblePhysics: Readonly<Partial<PhysicsOptions>> = {
+    collisionRadiusRatio: 1, collisionPadding: 0, screenRadiusRatio: 1.1
+}

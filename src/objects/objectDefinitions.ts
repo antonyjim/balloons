@@ -6,7 +6,7 @@ import { defaultPhysicsOptions, type PhysicsOptions } from './physicsOptions'
 import type { Balloon, BalloonConfig } from './balloonTypes'
 import type { BalloonFinish } from '../theme/types'
 import { drawLatexVector, latexPhysics } from './latexBalloon'
-import { drawBubbleVector, bubblePhysics } from './bubble'
+import { drawBubbleVector, bubblePhysics, bubbleFrame } from './bubble'
 import { drawHotAirVector, hotAirPhysics } from './hotAirBalloon'
 
 /** Settings for the current family of growing, floating objects. */
@@ -54,7 +54,7 @@ const definitions = {
     },
     bubble: {
         draw: drawBubbleVector,
-        spriteKey: () => null,
+        spriteKey: bubbleFrame,
         spriteHeight: 2.3,
         popAtMax: true,
         physics: bubblePhysics

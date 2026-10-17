@@ -3,6 +3,7 @@ import { BalloonFinish } from "../theme/types"
 import type { InteractiveObject, PopState } from "./objectTypes"
 
 export interface Balloon extends InteractiveObject, PopState {
+    bubbleMotion?: import('./bubble').BubbleMotion
     watermelon?: import("./watermelon").WatermelonState
     fire?: import("./hotAirFire").HotAirFireState
     burner?: import("./hotAirBalloon").BurnerState
