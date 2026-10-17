@@ -34,7 +34,7 @@ test('hidden timer settings, cooldown navigation, return balloon, and idle scree
         showModal() { this.open = true }
         close() { this.open = false }
     }
-    const target = new Element(), sketch = new Element(), elements = [], storage = new Map()
+    const target = new Element(), sketch = new Element(), timer = new Element(), elements = [], storage = new Map()
     sketch.shadowRoot = new Element()
     const location = { hash: '#/balloons' }
     const context = {
@@ -42,7 +42,7 @@ test('hidden timer settings, cooldown navigation, return balloon, and idle scree
         location, history: { replaceState(a, b, hash) { location.hash = hash } }, queueMicrotask: fn => fn(),
         localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) },
         document: { hidden: false, body: { append(element) { elements.push(element) } },
-            createElement: () => new Element(), querySelector: () => target, getElementById: () => sketch },
+            createElement: () => new Element(), querySelector: () => target, getElementById: id => id === 'play-timer' ? timer : sketch },
         window: { setTimeout(fn) { timeout = fn; return 1 }, setInterval(fn) { interval = fn }, addEventListener() {} },
         clearTimeout() { timeout = undefined },
         require(name) {
@@ -72,12 +72,14 @@ test('hidden timer settings, cooldown navigation, return balloon, and idle scree
     dialog.querySelector('form').emit('submit')
     assert.equal(dialog.open, false)
     assert.equal(JSON.parse(storage.get('balloons.play.settings')).enabled, true)
+    assert.equal(timer.textContent, '0:06')
     now = 5000; interval()
     assert.equal(breaks, 0, 'saving settings does not start the timer')
     now = 20_000
     app.objectCreated()
     now = 23_000
     app.objectCreated()
+    assert.equal(timer.textContent, '0:03', 'timer counts down without resetting for every object')
     now = 26_000; interval()
     assert.equal(location.hash, '/sketchpad')
     location.hash = '#/sketchpad' // Browser location normalizes assigned hashes.

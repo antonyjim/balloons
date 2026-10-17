@@ -1,5 +1,7 @@
 .play-settings { width: min(360px, calc(100vw - 48px)); padding: 24px; border: 1px solid #d8d3e3; border-radius: 20px; color: #352d43; background: #faf8ff; font: 16px system-ui, sans-serif; box-shadow: 0 18px 80px #18102f55; }
 .play-settings::backdrop { background: #17122577; }
+.timer-card { min-width: 85px; }
+#play-timer { font-size: 23px; font-weight: 750; line-height: 1.2; color: #4930b0; font-variant-numeric: tabular-nums; }
 .play-settings h2 { margin: 0 0 20px; font-size: 22px; }
 .play-settings label { display: block; margin: 16px 0; font-weight: 600; }
 .play-settings label span { font-weight: 400; font-size: 13px; }

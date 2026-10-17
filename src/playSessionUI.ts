@@ -19,6 +19,17 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
     returnBalloon.innerHTML = '<img src="/icons/objects/latex.svg" alt="" draggable="false"><span>Pop to play</span>'
     document.body.append(returnBalloon)
     const sync = (): void => {
+        const timer = document.getElementById('play-timer')
+        if (timer) {
+            const now = Date.now()
+            const remaining = session.phase === 'cooldown' ? session.cooldownUntil - now
+                : session.phase === 'ready' ? 0
+                : session.settings.timeLimit * 60_000 - (session.startedAt === null || session.idle(now) ? 0 : now - session.startedAt)
+            const seconds = Math.max(0, Math.ceil(remaining / 1000))
+            timer.textContent = session.settings.enabled ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : 'Off'
+            timer.setAttribute('aria-label', session.settings.enabled ? `Play time remaining: ${timer.textContent}` : 'Play timer disabled')
+            timer.parentElement?.setAttribute('title', session.settings.enabled ? 'Starts with the first object; resets after an idle cooldown' : 'Play timer disabled')
+        }
         const drawing = location.hash === '#/sketchpad'
         returnBalloon.hidden = session.phase !== 'ready' || !drawing
         for (const id of ['back-to-balloons', 'use-drawing']) {
@@ -115,7 +126,7 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
         sync()
     }, 250)
     return {
-        objectCreated() { session.objectCreated(Date.now()); idleShown = false; saver.hide() },
+        objectCreated() { session.objectCreated(Date.now()); idleShown = false; saver.hide(); sync() },
         resolveView(view) {
             queueMicrotask(sync)
             if (session.phase !== 'play' && view !== 'sketchpad') {

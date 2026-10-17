@@ -161,6 +161,7 @@ function resize(): void {
 
     const nextWidth = rect.width
     const nextHeight = rect.height
+    if (nextWidth <= 0 || nextHeight <= 0) return
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
 
@@ -170,7 +171,9 @@ function resize(): void {
     if (
         pixelWidth === currentPixelWidth &&
         pixelHeight === currentPixelHeight &&
-        dpr === currentDpr
+        dpr === currentDpr &&
+        nextWidth === width &&
+        nextHeight === height
     ) {
         return
     }
@@ -300,7 +303,8 @@ function update(dt: number): void {
 // }
 
 function render(): void {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    // The context already maps CSS coordinates to backing pixels, including DPR < 1.
+    ctx.clearRect(0, 0, width, height)
     paintLayer.draw(ctx, width, height, currentDpr)
     const surface = waterSurface(groundY, balloons)
     drawWater(ctx, width, groundY, surface, waterTime())

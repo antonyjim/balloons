@@ -56,7 +56,13 @@ export class PaintLayer {
     clear(): void {
         this.pending.length = 0
         if (this.canvas) {
-            this.canvas.getContext('2d')?.clearRect(0, 0, this.canvas.width, this.canvas.height)
+            const ctx = this.canvas.getContext('2d')
+            if (ctx) {
+                ctx.save()
+                ctx.setTransform(1, 0, 0, 1, 0, 0)
+                ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
+                ctx.restore()
+            }
         }
     }
 
