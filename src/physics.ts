@@ -1,3 +1,4 @@
+import { applyWater, waterSurface } from './water'
 import { getWatermelonToughness } from './objects/watermelon'
 import { updateBubbleMotion, disturbBubble, bubbleRadiusAt } from './objects/bubble'
 import { shouldIgniteHotAir } from './objects/hotAirFire'
@@ -76,7 +77,7 @@ function clampSpin(balloon: Balloon, physics = getPhysicsOptions(balloon)): void
 }
 
 export function popWithForce(balloons: Balloon[], popped: Balloon): void {
-    if (popped.popped) return
+    if (popped.popped || (popped.finish === 'apple' || popped.finish === 'duck')) return
     const physics = getPhysicsOptions(popped)
     popBalloon(popped)
 
@@ -115,11 +116,17 @@ export function updateBalloonPhysics(
     ambientTime += dt
     updateDeviceMotion(dt)
 
-    const options = collectOptions(balloons, config)
+    const options = collectOptions(balloons, config) as Map<Balloon, Readonly<PhysicsOptions>>
+    const surface = waterSurface(height, balloons)
     for (const balloon of balloons) if (!balloon.popped && balloon.finish === 'bubble') updateBubbleMotion(balloon, dt)
     for (const balloon of balloons) {
         if (balloon.popped) continue
-        const physics = options.get(balloon)!
+        let physics = options.get(balloon)!
+        applyWater(balloon, surface, dt)
+        if (surface !== null && balloon.finish === 'watermelon' && balloon.y + balloon.radius > surface) {
+            physics = { ...physics, watermelonBurstHeightRatio: Infinity }
+            options.set(balloon, physics)
+        }
         const definition = getObjectDefinition(balloon.finish)
         if (definition.updatePhysics) definition.updatePhysics(balloon, dt, width, height, physics, balloons)
         else {
@@ -247,6 +254,14 @@ function resolveScreenCollision(
     const minY = Math.min(r, height * 0.5)
     const maxY = Math.max(minY, height - r)
 
+    if (balloon.finish === 'bubble') {
+        const impact = Math.max(
+            balloon.x < minX ? -balloon.vx : 0,
+            balloon.x > maxX ? balloon.vx : 0,
+            balloon.y < minY ? -balloon.vy : 0,
+            balloon.y > maxY ? balloon.vy : 0)
+        if (impact >= physics.bubbleImpactBreakSpeed) { popBalloon(balloon); return }
+    }
     if (balloon.x < minX) {
         balloon.x = minX
         if (balloon.vx < 0) balloon.vx = -balloon.vx * physics.wallRetention
@@ -285,7 +300,7 @@ export function resolveBalloonCollisions(
     for (const balloon of balloons) {
         if (balloon.popped) continue
         const physics = options.get(balloon)!
-        if (balloon.finish === 'watermelon') impactVelocities.set(balloon, { x: balloon.x, y: balloon.y, vx: balloon.vx, vy: balloon.vy })
+        impactVelocities.set(balloon, { x: balloon.x, y: balloon.y, vx: balloon.vx, vy: balloon.vy })
         maxRadius = Math.max(maxRadius,
             balloon.radius * physics.collisionRadiusRatio * (balloon.finish === 'bubble' ? 1.15 : 1) + physics.collisionPadding / 2)
     }
@@ -412,7 +427,8 @@ function resolveCollision(a: Balloon, b: Balloon, options: ReadonlyMap<Balloon, 
     const minDistance = (a.finish === 'bubble' ? bubbleRadiusAt(a, direction) : a.radius) * aPhysics.collisionRadiusRatio
         + (b.finish === 'bubble' ? bubbleRadiusAt(b, direction + Math.PI) : b.radius) * bPhysics.collisionRadiusRatio +
         (aPhysics.collisionPadding + bPhysics.collisionPadding) / 2
-    if (a.finish === 'watermelon' && b.finish === 'watermelon') {
+    if ((a.finish === 'watermelon' && (b.finish === 'watermelon' || b.finish === 'apple'))
+        || (b.finish === 'watermelon' && a.finish === 'apple')) {
         // Incoming poses and velocities preserve all contacts in a multi-melon impact.
         const av = impactVelocities.get(a)!
         const bv = impactVelocities.get(b)!
@@ -424,11 +440,11 @@ function resolveCollision(a: Balloon, b: Balloon, options: ReadonlyMap<Balloon, 
                 ? -(relativeX * contactX + relativeY * contactY) / Math.sqrt(contactSq)
                 : Math.sqrt(relativeX * relativeX + relativeY * relativeY)
             const threshold = Math.min(
-                aPhysics.watermelonCollisionBreakSpeed * getWatermelonToughness(a, aPhysics),
-                bPhysics.watermelonCollisionBreakSpeed * getWatermelonToughness(b, bPhysics))
+                a.finish === 'watermelon' ? aPhysics.watermelonCollisionBreakSpeed * getWatermelonToughness(a, aPhysics) : Infinity,
+                b.finish === 'watermelon' ? bPhysics.watermelonCollisionBreakSpeed * getWatermelonToughness(b, bPhysics) : Infinity)
             if (closingSpeed >= threshold && closingSpeed > 0) {
-                collisionBreaks.add(a)
-                collisionBreaks.add(b)
+                if (a.finish === 'watermelon') collisionBreaks.add(a)
+                if (b.finish === 'watermelon') collisionBreaks.add(b)
             }
         }
     }
@@ -444,6 +460,10 @@ function resolveCollision(a: Balloon, b: Balloon, options: ReadonlyMap<Balloon, 
     const distance = Math.sqrt(distSq)
     const nx = dx / distance
     const ny = dy / distance
+    const av = impactVelocities.get(a)!, bv = impactVelocities.get(b)!
+    const closingSpeed = Math.max(0, -((bv.vx - av.vx) * nx + (bv.vy - av.vy) * ny))
+    if (a.finish === 'bubble' && closingSpeed >= aPhysics.bubbleImpactBreakSpeed) collisionBreaks.add(a)
+    if (b.finish === 'bubble' && closingSpeed >= bPhysics.bubbleImpactBreakSpeed) collisionBreaks.add(b)
     const penetration = Math.max(0, minDistance - distance)
     const impact = Math.max(0, -((b.vx - a.vx) * nx + (b.vy - a.vy) * ny)) + penetration * 3
     disturbBubble(a, nx, ny, impact)

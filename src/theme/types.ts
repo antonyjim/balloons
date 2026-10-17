@@ -5,6 +5,8 @@ export type BalloonFinish =
     | 'bubble'
     | 'paint'
     | 'watermelon'
+    | 'apple'
+    | 'duck'
 
 export type ThemeMode = 'auto' | ThemeId
 export type FinishMode = 'auto' | BalloonFinish

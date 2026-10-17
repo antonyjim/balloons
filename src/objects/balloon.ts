@@ -37,7 +37,7 @@ export function updateBalloon(
         return
     }
 
-    if (balloon.growing) {
+    if (balloon.growing && balloon.finish !== 'apple') {
         const maxRadius = maximumRadius(viewportWidth, viewportHeight, config)
         const growthLimit = Math.min(maxRadius, availableRadius(balloon, balloons, viewportWidth, viewportHeight, config))
 
@@ -76,6 +76,7 @@ type BalloonSprite = {
 const spriteCache = new Map<string, BalloonSprite>()
 const atlas = new SpriteAtlas()
 interface ObjectSprite {
+    duckVariant: Balloon['duckVariant']
     bubbleFrame: number
     sprite: BalloonSprite
     revision: number
@@ -87,6 +88,7 @@ interface ObjectSprite {
 const objectSprites = new WeakMap<Balloon, ObjectSprite>()
 
 function matchesAppearance(balloon: Balloon, cached: ObjectSprite): boolean {
+    if (balloon.duckVariant !== cached.duckVariant) return false
     if (balloon.finish === 'bubble' && bubbleFrame(balloon) !== cached.bubbleFrame) return false
     if (balloon.finish !== cached.finish || balloon.color !== cached.color || balloon.panelCount !== cached.panelCount) return false
     const panels = balloon.panelColors
@@ -137,7 +139,7 @@ export function drawBalloon(
             }
         }
         sprite = shared
-        objectSprites.set(balloon, { sprite, bubbleFrame: bubbleFrame(balloon), revision: definition.spriteRevision?.() ?? 0, finish: balloon.finish, color: balloon.color,
+        objectSprites.set(balloon, { duckVariant: balloon.duckVariant, sprite, bubbleFrame: bubbleFrame(balloon), revision: definition.spriteRevision?.() ?? 0, finish: balloon.finish, color: balloon.color,
             panelCount: balloon.panelCount, panelColors: balloon.panelColors?.slice() })
     }
     if (finish === 'hot-air') {
@@ -282,7 +284,7 @@ export function containsPoint(
 
 
 export function popBalloon(balloon: Balloon): void {
-    if (balloon.popped) return
+    if (balloon.popped || (balloon.finish === 'apple' || balloon.finish === 'duck')) return
     playPopSound(balloon.finish)
     balloon.growing = false
     balloon.pointerId = null
@@ -293,6 +295,7 @@ export function popBalloon(balloon: Balloon): void {
 
 
 export function isBalloonFinished(balloon: Balloon, config: BalloonConfig): boolean {
+    if ((balloon.finish === 'apple' || balloon.finish === 'duck')) return balloon.apple?.exited ?? false
     if (!balloon.popped) return false
     const definition = getObjectDefinition(balloon.finish)
     return definition.isFinished ? definition.isFinished(balloon) : balloon.popTime >= config.popDuration

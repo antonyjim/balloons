@@ -22,7 +22,7 @@ function validThemeMode(value: string | null): ThemeMode {
 }
 
 function validFinishMode(value: string | null): FinishMode {
-    return value === 'latex' || value === 'hot-air' || value === 'bubble' || value === 'paint' || value === 'watermelon'
+    return value === 'latex' || value === 'hot-air' || value === 'bubble' || value === 'paint' || value === 'watermelon' || value === 'apple' || value === 'duck'
         ? value
         : 'auto'
 }
@@ -42,6 +42,8 @@ export class ThemeManager {
         'hot-air',
         'bubble',
         'paint',
+        'apple',
+        'duck',
         'watermelon'
     ]
     private readonly handleVisibility = () => this.refresh()

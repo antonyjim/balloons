@@ -1,3 +1,5 @@
+import { randomDuckAppearance } from './objects/duck'
+import { drawWater, waterSurface } from './water'
 import { setupWorkspace } from './workspace'
 import { resetPopsDue, RESET_DEADLINE_SECONDS } from './resetTiming'
 import { maximumRadius, availableRadius, enforceSizeLimits } from './objects/sizeLimits'
@@ -6,7 +8,7 @@ import { containsBasketPoint, moveHotAirAssembly } from './objects/hotAirBalloon
 import { sceneGround } from './sceneGround'
 import { bindActivation } from './activation'
 import { preloadBalloonMaterials } from './objects/balloonMaterials'
-import { preloadWatermelonArt } from './objects/watermelon'
+import { sampleAppleDrag, releaseAppleThrow } from './objects/apple'
 import { paintLayer } from './objects/paintBalloon'
 import { setupObjectPicker } from './objectPicker'
 import { getPhysicsOptions } from './objects/objectDefinitions'
@@ -46,7 +48,6 @@ function requireContext(element: HTMLCanvasElement): CanvasRenderingContext2D {
 }
 
 void preloadBalloonMaterials()
-void preloadWatermelonArt().catch(error => console.warn("Watermelon artwork failed:", error))
 const canvas = requireCanvas()
 const ctx = requireContext(canvas)
 let balloonViewActive = true
@@ -64,9 +65,9 @@ const balloonConfig: BalloonConfig = {
     ...defaultBalloonConfig,
     initialRadius: isMobile ? 22 : 40,
     minRadius: isMobile ? 18 : 24,
-    maxRadius: isMobile ? 64 : 120,
-    maxRadiusScreenRatio: isMobile ? 0.16 : 0.18,
-    maxObjectAreaRatio: 0.05,
+    maxRadius: isMobile ? 100 : 190,
+    maxRadiusScreenRatio: isMobile ? 0.24 : 0.27,
+    maxObjectAreaRatio: 0.12,
     maxSceneAreaRatio: isMobile ? 0.65 : 0.8,
     growthRate: isMobile ? 45 : 80,
     maxScreenRatio: isMobile ? 0.65 : 1 / 2.75
@@ -83,7 +84,7 @@ function applyTheme(): void {
     const theme = themeManager.current
     const label = document.getElementById("counter-label")
 
-    if (label) label.innerText = theme.finish === "watermelon" ? "WATERMELONS" : theme.finish === "bubble" ? "BUBBLES" : "BALLOONS"
+    if (label) label.innerText = theme.finish === "duck" ? "RUBBER DUCKS" : theme.finish === "apple" ? "APPLES" : theme.finish === "watermelon" ? "WATERMELONS" : theme.finish === "bubble" ? "BUBBLES" : "BALLOONS"
 
     void background.setBackground(customBackground ?? theme.theme.background)
 }
@@ -236,7 +237,9 @@ function updateReset(): void {
     ) {
         const balloon = resetQueue.pop()!
 
-        if (!balloon.popped) {
+        if ((balloon.finish === 'apple' || balloon.finish === 'duck')) {
+            balloon.apple = { exited: true }
+        } else if (!balloon.popped) {
             popWithForce(balloons, balloon)
         }
     }
@@ -272,6 +275,7 @@ function update(dt: number): void {
         if (
             isBalloonFinished(balloon, balloonConfig)
         ) {
+            if (balloon.pointerId !== null) releaseBalloon(balloon.pointerId)
             balloons.splice(i, 1)
         }
     }
@@ -296,11 +300,13 @@ function update(dt: number): void {
 function render(): void {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     paintLayer.draw(ctx, width, height, currentDpr)
+    const surface = waterSurface(groundY, balloons)
+    drawWater(ctx, width, groundY, surface, performance.now() / 1000)
 
     for (const balloon of balloons) {
         drawBalloon(ctx, balloon)
     }
-
+    drawWater(ctx, width, groundY, surface, performance.now() / 1000, true)
 
 }
 
@@ -397,6 +403,15 @@ canvas.addEventListener('pointerdown', event => {
             canvas.setPointerCapture(event.pointerId)
             return
         }
+        if ((balloon.finish === 'apple' || balloon.finish === 'duck')) {
+            sampleAppleDrag(balloon, x, y, event.timeStamp)
+            balloon.pointerId = event.pointerId
+            balloon.anchorX = balloon.x
+            balloon.anchorY = balloon.y
+            activePointers.set(event.pointerId, balloon)
+            canvas.setPointerCapture(event.pointerId)
+            return
+        }
         popWithForce(balloons, balloon)
         return
     }
@@ -409,28 +424,30 @@ canvas.addEventListener('pointerdown', event => {
         vy: 0,
         anchorX: x,
         anchorY: y,
-        radius: themeManager.current.finish === "watermelon" ? (isMobile ? 30 : 42) : balloonConfig.initialRadius,
+        radius: themeManager.current.finish === "duck" ? (isMobile ? 30 : 42) : themeManager.current.finish === "apple" ? (isMobile ? 23 : 30) : themeManager.current.finish === "watermelon" ? (isMobile ? 30 : 42) : balloonConfig.initialRadius,
         color: themeManager.randomBalloonColor(),
         panelColors: getRandomPanelColors(themeManager.current.theme, Math.max(1, Math.floor(Math.random() * 5))),
         finish: themeManager.current.finish,
-        angle: themeManager.current.finish === "hot-air" ? 0 : Math.random() * Math.PI * 2,
+        angle: (themeManager.current.finish === "hot-air" || themeManager.current.finish === "duck") ? 0 : Math.random() * Math.PI * 2,
         angularVelocity: 0,
-        growing: true,
+        growing: themeManager.current.finish !== "apple",
         popped: false,
         popTime: 0
     }
 
 
+    if (balloon.finish === "duck") Object.assign(balloon, randomDuckAppearance())
     const maxSize = maximumRadius(width, groundY, balloonConfig)
     const room = availableRadius(balloon, balloons, width, groundY, balloonConfig)
     const minimum = Math.min(balloonConfig.minRadius ?? balloonConfig.initialRadius, maxSize)
     if (room < minimum || maxSize <= 0) return
     balloon.radius = Math.max(minimum, Math.min(balloon.radius, maxSize, room))
+    if ((balloon.finish === "apple" || balloon.finish === "duck")) sampleAppleDrag(balloon, x, y, event.timeStamp)
     balloons.push(balloon)
     syncGround()
     activePointers.set(event.pointerId, balloon)
     canvas.setPointerCapture(event.pointerId)
-    if (activePointers.size === 1 && balloon.finish !== "watermelon") startInflateSound(balloon.finish)
+    if (activePointers.size === 1 && balloon.finish !== "watermelon" && balloon.finish !== "apple" && balloon.finish !== "duck") startInflateSound(balloon.finish)
     updateCounter()
 })
 
@@ -446,6 +463,7 @@ canvas.addEventListener('pointermove', event => {
             drag.y = y
             return
         }
+        if ((balloon.finish === "apple" || balloon.finish === "duck")) sampleAppleDrag(balloon, x, y, event.timeStamp)
         balloon.anchorX = x
         balloon.anchorY = y
     } catch {
@@ -457,7 +475,7 @@ canvas.addEventListener('pointermove', event => {
 
 })
 
-function releaseBalloon(pointerId: number): void {
+function releaseBalloon(pointerId: number, time = performance.now()): void {
     const basketDrag = basketDrags.delete(pointerId)
     const balloon = activePointers.get(pointerId)
     if (!balloon) return
@@ -465,7 +483,8 @@ function releaseBalloon(pointerId: number): void {
     balloon.pointerId = null
     balloon.growing = false
 
-    if (!balloon.popped && !basketDrag) {
+    if ((balloon.finish === "apple" || balloon.finish === "duck")) releaseAppleThrow(balloon, time)
+    if (!balloon.popped && !basketDrag && balloon.finish !== "apple" && balloon.finish !== "duck") {
         const angle = Math.random() * Math.PI * 2
         const { releaseImpulse } = getPhysicsOptions(balloon, balloonConfig)
         const impulse = Math.max(releaseImpulse / 2, releaseImpulse * (0.9 + Math.random() * 0.5))
@@ -482,7 +501,7 @@ let lastInflateFinish: BalloonFinish | null = null
 function syncInflateSound(): void {
     const balloon = balloons.find(
         balloon =>
-            balloon.finish !== "watermelon" &&
+            balloon.finish !== "watermelon" && balloon.finish !== "apple" && balloon.finish !== "duck" &&
             balloon.growing &&
             !balloon.popped &&
             balloon.pointerId !== null
@@ -517,7 +536,14 @@ function stopInflateSoundFactory() {
 }
 
 
-canvas.addEventListener('pointerup', event => releaseBalloon(event.pointerId))
+canvas.addEventListener('pointerup', event => {
+    const apple = activePointers.get(event.pointerId)
+    if (apple && (apple.finish === 'apple' || apple.finish === 'duck')) {
+        const { x, y } = canvasPosition(event)
+        sampleAppleDrag(apple, x, y, event.timeStamp)
+    }
+    releaseBalloon(event.pointerId, event.timeStamp)
+})
 canvas.addEventListener('pointercancel', event => releaseBalloon(event.pointerId))
 canvas.addEventListener('lostpointercapture', event => releaseBalloon(event.pointerId))
 

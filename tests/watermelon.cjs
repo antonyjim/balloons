@@ -23,7 +23,7 @@ test('a low drop settles on the floor and stays intact', () => {
     assert.equal(fruit.vy, 0)
 })
 test('a high drop bursts on impact and produces watermelon fragments', () => withoutSound(() => {
-    const fruit = melon(200)
+    const fruit = melon(-200)
     for (let i = 0; i < 180 && !fruit.popped; i++) updateBalloonPhysics([fruit], 1/60, 1000, 800, defaultBalloonConfig)
     assert.equal(fruit.popped, true)
     assert.equal(fruit.watermelon.chunks.length, 9)
@@ -89,7 +89,7 @@ test('surviving ground impacts bounce and impart rolling motion', () => {
 
 test('hard watermelon contact breaks both fruits, including the stationary target', () => withoutSound(() => {
     const a = melon(300), b = melon(360)
-    a.vy = 1000
+    a.vy = 1800
     resolveBalloonCollisions([a, b], defaultBalloonConfig)
     assert.equal(a.popped, true)
     assert.equal(b.popped, true)
@@ -108,7 +108,7 @@ test('gentle, tangential, or separating contact leaves melons intact', () => {
 test('all fruits in a simultaneous hard impact break regardless of pair order', () => withoutSound(() => {
     for (const reverse of [false, true]) {
         const falling = melon(245), left = melon(300), right = melon(300)
-        left.x = 270; right.x = 330; falling.vy = 1000
+        left.x = 270; right.x = 330; falling.vy = 1800
         const objects = reverse ? [right, left, falling] : [falling, left, right]
         resolveBalloonCollisions(objects, defaultBalloonConfig)
         assert.ok(objects.every(object => object.popped))

@@ -37,6 +37,19 @@ const { getPhysicsOptions } = require('../dist-ts/objects/objectDefinitions')
 const body = overrides => ({ x: 300, y: 300, radius: 40, vx: 0, vy: 0, angle: 0, angularVelocity: 0,
     anchorX: 300, anchorY: 300, pointerId: null, popped: false, growing: false, finish: 'bubble', ...overrides })
 
+test('hard closing impacts pop bubbles but tangential and separating impacts do not', () => {
+    const previous = audio.playPopSound
+    audio.playPopSound = () => {}
+    try {
+        for (const [vx, vy, expected] of [[600, 0, true], [100, 0, false], [-600, 0, false], [0, 600, false]]) {
+            const bubble = body({ vx, vy }), target = body({ finish: 'apple', x: 370 })
+            resolveBalloonCollisions([bubble, target], defaultBalloonConfig)
+            assert.equal(bubble.popped, expected)
+            assert.equal(target.popped, false)
+        }
+    } finally { audio.playPopSound = previous }
+})
+
 test('collision direction and body spin do not rotate the bubble artwork', () => {
     const previous = global.document
     const raster = new Proxy({}, { get: (_, key) => {

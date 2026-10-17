@@ -3,6 +3,7 @@
  */
 export interface PhysicsOptions {
     /** Per-melon multipliers for the base breaking height. */
+    bubbleImpactBreakSpeed: number
     watermelonToughnessMin: number
     watermelonToughnessMax: number
     /** Closing speed along the contact normal, before toughness scaling (px/s). */
@@ -63,9 +64,10 @@ export interface PhysicsOptions {
 }
 
 export const defaultPhysicsOptions: Readonly<PhysicsOptions> = Object.freeze({
-    watermelonToughnessMin: 0.65,
-    watermelonToughnessMax: 1.5,
-    watermelonCollisionBreakSpeed: 450,
+    bubbleImpactBreakSpeed: 400,
+    watermelonToughnessMin: 1.25,
+    watermelonToughnessMax: 2.2,
+    watermelonCollisionBreakSpeed: 650,
     watermelonBounce: 0.38,
     watermelonRollingDrag: 1.5,
     watermelonGravity: 900,

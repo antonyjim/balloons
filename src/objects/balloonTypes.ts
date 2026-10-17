@@ -3,6 +3,8 @@ import { BalloonFinish } from "../theme/types"
 import type { InteractiveObject, PopState } from "./objectTypes"
 
 export interface Balloon extends InteractiveObject, PopState {
+    duckVariant?: 'duck' | 'goose'
+    apple?: { exited: boolean }
     bubbleMotion?: import('./bubble').BubbleMotion
     watermelon?: import("./watermelon").WatermelonState
     fire?: import("./hotAirFire").HotAirFireState

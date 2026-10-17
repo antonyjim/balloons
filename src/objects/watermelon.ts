@@ -28,57 +28,35 @@ export function getWatermelonToughness(melon: Balloon, physics: Readonly<Physics
         * Math.max(0, physics.watermelonToughnessMax - physics.watermelonToughnessMin)
 }
 
-let watermelonArt: HTMLImageElement | null = null
-let artReady = false
-let artPromise: Promise<void> | null = null
-export const watermelonSpriteRevision = (): number => artReady ? 1 : 0
-export function preloadWatermelonArt(): Promise<void> {
-    if (artPromise) return artPromise
-    const image = new Image()
-    image.src = '/textures/watermelon.png'
-    artPromise = image.decode().then(() => { watermelonArt = image; artReady = true })
-        .catch(error => { artPromise = null; throw error })
-    return artPromise
-}
+export const watermelonSpriteRevision = (): number => 1
 
 export function drawWatermelon(ctx: CanvasRenderingContext2D, melon: Balloon): void {
     const r = melon.radius
-    if (artReady && watermelonArt) {
-        ctx.save()
-        ctx.translate(melon.x, melon.y)
-        ctx.rotate(melon.angle)
-        ctx.drawImage(watermelonArt,
-            watermelonArt.naturalWidth * 0.03, watermelonArt.naturalHeight * 0.085,
-            watermelonArt.naturalWidth * 0.94, watermelonArt.naturalHeight * 0.85,
-            -r, -r * 0.85, r * 2, r * 1.7)
-        ctx.restore()
-        return
-    }
     ctx.save()
     ctx.translate(melon.x, melon.y)
     ctx.rotate(melon.angle)
     ctx.beginPath()
     ctx.ellipse(0, 0, r, r * 0.85, 0, 0, Math.PI * 2)
-    const skin = ctx.createRadialGradient(-r * 0.3, -r * 0.3, 0, 0, 0, r)
-    skin.addColorStop(0, '#7ba83b')
-    skin.addColorStop(0.6, '#39752d')
-    skin.addColorStop(1, '#154a26')
-    ctx.fillStyle = skin
+    ctx.fillStyle = '#55964a'
     ctx.fill()
     ctx.save()
     ctx.clip()
-    ctx.strokeStyle = '#a2ba55'
+    ctx.strokeStyle = '#bbd568'
     ctx.lineWidth = r * 0.11
     for (let i = -2; i <= 2; i++) {
-        const x = i * r * 0.35
+        const y = i * r * 0.29
         ctx.beginPath()
-        ctx.moveTo(x * 0.65, -r)
-        ctx.bezierCurveTo(x + r * 0.12, -r * 0.4, x - r * 0.18, r * 0.4, x * 0.6, r)
+        ctx.moveTo(-r, y * 0.55)
+        ctx.bezierCurveTo(-r * 0.4, y + r * 0.06, r * 0.4, y - r * 0.06, r, y * 0.55)
         ctx.stroke()
     }
+    ctx.beginPath()
+    ctx.ellipse(-r * 0.37, -r * 0.36, r * 0.21, r * 0.08, -0.45, 0, Math.PI * 2)
+    ctx.fillStyle = '#dce9a0'
+    ctx.fill()
     ctx.restore()
-    ctx.strokeStyle = '#254c21'
-    ctx.lineWidth = r * 0.025
+    ctx.strokeStyle = 'rgba(40,28,38,0.8)'
+    ctx.lineWidth = Math.max(1.3, r * 0.03)
     ctx.beginPath()
     ctx.ellipse(0, 0, r, r * 0.85, 0, 0, Math.PI * 2)
     ctx.stroke()

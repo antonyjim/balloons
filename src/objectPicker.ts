@@ -36,22 +36,13 @@ export function setupObjectPicker(manager: ThemeManager): void {
         })
     }
     picker.addEventListener('keydown', event => {
-        if (event.key === 'Escape') {
-            event.preventDefault()
-            close(true)
-        } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+        if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
             event.preventDefault()
             if (menu.hidden) { open(event.key === 'ArrowUp' || event.key === 'End'); return }
             const current = items.indexOf(document.activeElement as HTMLButtonElement)
             const index = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
                 : (current + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
             items[index]?.focus()
-        } else if (event.key === 'Tab') close()
-    })
-    document.addEventListener('pointerdown', event => {
-        if (!picker.contains(event.target as Node)) close()
-    })
-    picker.addEventListener('focusout', event => {
-        if (!picker.contains(event.relatedTarget as Node | null)) close()
+        }
     })
 }

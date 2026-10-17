@@ -20,6 +20,10 @@ const SOUND_URLS: Record<SoundKey, string> = {
     'paint:pop': latexPopUrl,
     'watermelon:inflate': latexInflateUrl,
     'watermelon:pop': latexPopUrl,
+    'apple:inflate': latexInflateUrl,
+    'apple:pop': latexPopUrl,
+    'duck:inflate': latexInflateUrl,
+    'duck:pop': latexPopUrl,
 
     'bubble:inflate': bubbleInflateUrl,
     'bubble:pop': bubblePopUrl,
@@ -260,7 +264,7 @@ let burnerLevel = 0
 
 /** Mix all burners into one quiet noise bed, rather than creating hundreds of loops. */
 export function setBurnerSoundLevel(intensity: number): void {
-    burnerLevel = Math.min(0.22, 0.07 * Math.sqrt(Math.max(0, intensity)))
+    burnerLevel = Math.min(0.022, 0.007 * Math.sqrt(Math.max(0, intensity)))
     syncBurnerSource()
 }
 export function stopBurnerSound(): void {
