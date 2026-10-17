@@ -1,9 +1,10 @@
 import { bindActivation } from './activation'
-import { setupNavigation } from './navigation'
+import { setupNavigation, type AppView } from './navigation'
 import { mountSketchpad, type Sketchpad } from './sketchpad'
 import { themes } from './theme/themes'
 
 interface WorkspaceOptions {
+    resolveView?(view: AppView): AppView
     setAuto(): void
     setSimpleMode(enabled: boolean): void
     showBalloons(active: boolean): void
@@ -108,7 +109,8 @@ export function setupWorkspace(options: WorkspaceOptions): void {
         const target = event.target as Node
         if (!panel.contains(target) && !trigger.contains(target)) close()
     })
-    setupNavigation(view => {
+    setupNavigation(requestedView => {
+        const view = options.resolveView?.(requestedView) ?? requestedView
         const drawing = view === 'sketchpad'
         close()
         if (drawing) options.showBalloons(false)

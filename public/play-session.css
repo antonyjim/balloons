@@ -1,0 +1,16 @@
+.play-settings { width: min(360px, calc(100vw - 48px)); padding: 24px; border: 1px solid #d8d3e3; border-radius: 20px; color: #352d43; background: #faf8ff; font: 16px system-ui, sans-serif; box-shadow: 0 18px 80px #18102f55; }
+.play-settings::backdrop { background: #17122577; }
+.play-settings h2 { margin: 0 0 20px; font-size: 22px; }
+.play-settings label { display: block; margin: 16px 0; font-weight: 600; }
+.play-settings label span { font-weight: 400; font-size: 13px; }
+.play-settings input, .play-settings select { display: block; box-sizing: border-box; width: 100%; margin-top: 7px; padding: 10px; border: 1px solid #bdb6cd; border-radius: 9px; font: inherit; background: white; color: inherit; }
+.play-settings p { font-size: 13px; line-height: 1.5; color: #655b73; }
+.play-settings-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+.play-settings-actions button { padding: 10px 18px; border: 1px solid #bdb6cd; border-radius: 10px; font: inherit; cursor: pointer; background: #eee8f8; color: #352d43; }
+.cooldown-balloon { position: fixed; right: 24px; top: 18%; z-index: 1000; width: 94px; padding: 8px; background: transparent; border: 0; cursor: pointer; touch-action: none; animation: return-balloon-bob 3s ease-in-out infinite; }
+.cooldown-balloon img { display: block; width: 78px; height: 116px; filter: drop-shadow(0 4px 5px #352d4322); }
+.cooldown-balloon span { display: block; padding: 5px; border-radius: 12px; background: #fffdf4e6; color: #352d43; font: 12px system-ui, sans-serif; }
+.cooldown-balloon[hidden], .mystify-screen[hidden] { display: none; }
+canvas.mystify-screen { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 10000; background: #080911; touch-action: none; }
+@keyframes return-balloon-bob { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-15px) rotate(4deg); } }
+@media (prefers-reduced-motion: reduce) { .cooldown-balloon { animation: none; } }

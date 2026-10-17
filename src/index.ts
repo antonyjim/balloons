@@ -1,3 +1,4 @@
+import { setupPlaySession } from './playSessionUI'
 import { randomDuckAppearance } from './objects/duck'
 import { drawWater, waterSurface, waterTime } from './water'
 import { setupWorkspace } from './workspace'
@@ -447,6 +448,7 @@ canvas.addEventListener('pointerdown', event => {
     balloon.radius = Math.max(minimum, Math.min(balloon.radius, maxSize, room))
     if ((balloon.finish === "apple" || balloon.finish === "duck")) sampleAppleDrag(balloon, x, y, event.timeStamp)
     balloons.push(balloon)
+    playSession.objectCreated()
     syncGround()
     activePointers.set(event.pointerId, balloon)
     canvas.setPointerCapture(event.pointerId)
@@ -578,7 +580,9 @@ const sketchLink = document.querySelector<HTMLAnchorElement>('.sketch-button')
 if (sketchLink) bindActivation(sketchLink)
 // background.addEventListener('load', drawBackground)
 // background.src = '/bg.png'
+const playSession = setupPlaySession(cancelCanvasPointers)
 setupWorkspace({
+    resolveView(view) { return playSession.resolveView(view) },
     setAuto() { themeManager.setMode('auto') },
     setSimpleMode(enabled) { themeManager.setSimpleMode(enabled) },
     showBalloons(active) {
