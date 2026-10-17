@@ -34,7 +34,7 @@ function pointer(type, values = {}) {
 test('dispenser, touch drag matching, speech, cancellation, and view switching form one playable flow', () => {
     const elements = Object.fromEntries(['shelves', 'piece', 'dispense', 'instruction', 'progress', 'tray'].map(name => [name, new Element()]))
     const links = [new Element(), new Element()]
-    const root = { innerHTML: '', querySelector: selector => elements[selector.slice(1)], querySelectorAll: () => links }
+    const root = Object.assign(new EventTarget(), { innerHTML: '', querySelector: selector => elements[selector.slice(1)], querySelectorAll: () => links })
     const browser = new EventTarget(), spoken = []
     let speechCancels = 0
     browser.speechSynthesis = { cancel() { speechCancels++ }, speak(utterance) { spoken.push(utterance.text) } }
@@ -76,8 +76,15 @@ test('dispenser, touch drag matching, speech, cancellation, and view switching f
     piece.dispatchEvent(pointer('pointercancel'))
     assert.equal(piece.captured.size, 0)
     assert.equal(piece.hidden, false)
+    root.dispatchEvent(pointer('pointerdown', { pointerType: 'touch' }))
+    piece.dispatchEvent(pointer('pointerdown', { pointerType: 'touch' }))
+    piece.dispatchEvent(pointer('pointerup', { pointerType: 'touch' }))
+    assert.equal(spoken.length, 1, 'touch speech waits for the native touch-end activation')
+    root.dispatchEvent(new Event('touchend'))
+    assert.equal(spoken.length, 2)
+    dispense.dispatchEvent(new Event('click'))
     app.setActive(false)
-    assert.ok(speechCancels >= 2)
+    assert.ok(speechCancels >= 1)
     app.setActive(true)
     assert.equal(piece.hidden, false, 'returning preserves the pending piece and the shelf progress')
 })

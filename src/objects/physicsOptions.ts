@@ -2,6 +2,8 @@
  * Zero disables forces such as buoyancy, breeze response, and rocking.
  */
 export interface PhysicsOptions {
+    /** Closing speed required for an apple impact to pop this object (px/s). */
+    appleImpactBreakSpeed: number
     /** Per-melon multipliers for the base breaking height. */
     bubbleImpactBreakSpeed: number
     watermelonToughnessMin: number
@@ -64,6 +66,7 @@ export interface PhysicsOptions {
 }
 
 export const defaultPhysicsOptions: Readonly<PhysicsOptions> = Object.freeze({
+    appleImpactBreakSpeed: 550,
     bubbleImpactBreakSpeed: 400,
     watermelonToughnessMin: 1.25,
     watermelonToughnessMax: 2.2,

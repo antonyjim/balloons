@@ -49,7 +49,7 @@ let inflateGain: GainNode | null = null
 function getContext(): AudioContext {
     if (!context || context.state === 'closed') {
         context = new AudioContext()
-        context.addEventListener('statechange', () => { syncInflateSource(); syncBurnerSource() })
+        context.addEventListener('statechange', () => { syncInflateSource(); syncBurnerSource(); flushDuckCall() })
     }
     return context
 }
@@ -63,6 +63,13 @@ const rawSounds = new Map<string, ArrayBuffer>()
 let decodePromise: Promise<void> | null = null
 let unlockPromise: Promise<void> | null = null
 let audioGeneration = 0
+let pendingDuckCall: { goose: boolean, at: number } | null = null
+function flushDuckCall(): void {
+    if (context?.state !== 'running' || !pendingDuckCall) return
+    const call = pendingDuckCall
+    pendingDuckCall = null
+    if (performance.now() - call.at < 600) playDuckCall(call.goose)
+}
 
 export function preloadSounds(): Promise<void> {
     if (preloadPromise) return preloadPromise
@@ -109,11 +116,15 @@ function decodeSounds(): Promise<void> {
 }
 
 export function unlockAudio(init = false): void {
+    try {
+        const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession
+        if (session) session.type = 'playback'
+    } catch { /* Older Safari may not expose audio session selection. */ }
     const ctx = getContext()
     // Call resume synchronously inside the pointer handler, before loading awaits.
-    if (ctx.state !== 'running' && !unlockPromise) {
+    if (ctx.state !== 'running' && (init || !unlockPromise)) {
         const generation = audioGeneration
-        unlockPromise = ctx.resume().then(() => { syncInflateSource(); syncBurnerSource() }).catch(error => {
+        unlockPromise = ctx.resume().then(() => { syncInflateSource(); syncBurnerSource(); flushDuckCall() }).catch(error => {
             console.warn('AudioContext resume failed:', error)
         }).finally(() => {
             if (generation === audioGeneration) unlockPromise = null
@@ -229,8 +240,12 @@ export function playPopSound(finish: BalloonFinish = 'latex'): void {
 
 /** A short nasal call when a bird is pressed; no extra sound download. */
 export function playDuckCall(goose = false): void {
+    unlockAudio()
     const ctx = context
-    if (!ctx || ctx.state !== 'running') return
+    if (!ctx || ctx.state !== 'running') {
+        pendingDuckCall = { goose, at: performance.now() }
+        return
+    }
     const start = ctx.currentTime
     const source = ctx.createOscillator()
     const filter = ctx.createBiquadFilter()
@@ -269,6 +284,7 @@ export function disposeSounds(): void {
     stopInflateSound()
     stopBurnerSound()
     burnerBuffer = null
+    pendingDuckCall = null
 
     const ctx = context
     audioGeneration++
@@ -335,4 +351,14 @@ function syncBurnerSource(): void {
         burnerSource.start()
     }
     burnerGain!.gain.setTargetAtTime(burnerLevel, ctx.currentTime, 0.1)
+}
+
+/** Safari may allow touch-end/click even when the earlier pointer-down was blocked. */
+export function setupAudioGestures(): void {
+    const unlock = (event: Event): void => {
+        if (event.isTrusted) unlockAudio(true)
+    }
+    for (const name of ['touchend', 'pointerup', 'click', 'keydown']) {
+        document.addEventListener(name, unlock, { capture: true, passive: true })
+    }
 }

@@ -91,7 +91,7 @@ function drawGoose(ctx: CanvasRenderingContext2D, goose: Balloon): void {
 export function updateDuck(duck: Balloon, dt: number, width: number, ground: number, physics: Readonly<PhysicsOptions>): void {
     const pressed = duck.pointerId !== null ? 1 : 0
     duck.duckPress = (duck.duckPress ?? 0) + (pressed - (duck.duckPress ?? 0)) * (1 - Math.exp(-12 * dt))
-    const flight = duck.duckFlight ??= { age: 0, delay: 30 + Math.random() * 15, flying: false, elapsed: 0, direction: Math.random() < 0.5 ? -1 : 1 }
+    const flight = duck.duckFlight ??= { age: 0, delay: 30 + Math.random() * 60, flying: false, elapsed: 0, direction: Math.random() < 0.5 ? -1 : 1 }
     flight.age += dt
     if (!flight.flying && flight.age >= flight.delay && duck.pointerId === null) {
         flight.flying = true
@@ -99,6 +99,7 @@ export function updateDuck(duck: Balloon, dt: number, width: number, ground: num
     }
     if (!flight.flying || duck.pointerId !== null) {
         updateApple(duck, dt, width, ground, physics)
+        constrainDuck(duck, width, ground, physics)
         return
     }
     flight.elapsed += dt
@@ -112,6 +113,14 @@ export function updateDuck(duck: Balloon, dt: number, width: number, ground: num
 
 export function constrainDuck(duck: Balloon, width: number, ground: number, physics: Readonly<PhysicsOptions>): void {
     if (!duck.duckFlight?.flying || duck.pointerId !== null) {
+        const margin = Math.min(duck.radius * 1.15, width / 2)
+        if (duck.x < margin) {
+            duck.x = margin
+            if (duck.vx < 0) duck.vx *= -physics.wallRetention
+        } else if (duck.x > width - margin) {
+            duck.x = width - margin
+            if (duck.vx > 0) duck.vx *= -physics.wallRetention
+        }
         constrainApple(duck, width, ground, physics)
         return
     }

@@ -16,13 +16,14 @@ class Canvas extends Element {
     width = 0
     height = 0
     content = 'blank'
+    imageCalls = []
     captures = new Set()
     context = {
         fillStyle: '', save() {}, restore() {}, setTransform() {}, beginPath() {}, arc() {},
         canvas: this,
         fillRect() { this.canvas.content = 'paper' },
         fill() { this.canvas.content = 'drawn' },
-        drawImage(other) { this.canvas.content = other.content }
+        drawImage(other, ...args) { this.canvas.content = other.content; this.canvas.imageCalls.push(args) }
     }
     getContext() { return this.context }
     setPointerCapture(id) { this.captures.add(id) }
@@ -71,6 +72,15 @@ test('sketchpad preserves the drawing across view switches and resize and export
     assert.equal(canvas.width, 1000)
     assert.equal(canvas.content, 'drawn')
     assert.equal(await (await sketch.snapshot()).text(), 'drawn')
+    browser.innerWidth = 600
+    browser.innerHeight = 1000
+    browser.dispatchEvent(new Event('resize'))
+    assert.equal(canvas.width, 600)
+    assert.deepEqual(canvas.imageCalls.at(-1).slice(-4), [0, 0, 1000, 1000], 'rotation crops a retained square instead of squeezing the drawing')
+    browser.innerWidth = 1000
+    browser.innerHeight = 600
+    browser.dispatchEvent(new Event('resize'))
+    assert.deepEqual(canvas.imageCalls.at(-1).slice(-4), [0, 0, 1000, 1000], 'rotating back preserves the same logical artwork size')
     elements['use-drawing'].dispatchEvent(new Event('click'))
     await new Promise(resolve => setImmediate(resolve))
     assert.deepEqual(exported, ['drawn'])

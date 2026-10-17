@@ -1,3 +1,4 @@
+import { burstDuck, updateDuckBurst, drawDuckBurst, DUCK_BURST_DURATION } from './duckBurst'
 import { drawDuck, updateDuck, constrainDuck } from './duck'
 import { drawApple, appleSpriteRevision, updateApple, constrainApple } from './apple'
 import { materialRevision } from './balloonMaterials'
@@ -32,13 +33,15 @@ const definitions = {
     duck: {
         draw: drawDuck, spriteKey: object => [object.color, object.duckVariant], spriteHeight: 2.4,
         hitRadiusRatio: 1, popAtMax: false,
-        physics: { releaseImpulse: 0, collisionRadiusRatio: 0.8, collisionRestitution: 0.25 },
-        updatePhysics: updateDuck, constrain: constrainDuck
+        physics: { appleImpactBreakSpeed: 1500, releaseImpulse: 0, collisionRadiusRatio: 0.8, collisionRestitution: 0.25 },
+        updatePhysics: updateDuck, constrain: constrainDuck,
+        onPop: burstDuck, updatePopped: updateDuckBurst, drawPopped: drawDuckBurst,
+        isFinished: object => object.popTime >= DUCK_BURST_DURATION
     },
     apple: {
         draw: drawApple, spriteRevision: appleSpriteRevision, spriteKey: () => null,
         spriteHeight: 2.4, hitRadiusRatio: 0.9, popAtMax: false,
-        physics: { releaseImpulse: 0, collisionRadiusRatio: 0.9, collisionRestitution: 0.25 },
+        physics: { appleImpactBreakSpeed: 1700, releaseImpulse: 0, collisionRadiusRatio: 0.9, collisionRestitution: 0.25 },
         updatePhysics: updateApple, constrain: constrainApple
     },
     watermelon: {
@@ -55,13 +58,13 @@ const definitions = {
         spriteHeight: 2.4,
         popAtMax: true,
         hitRadiusRatio: 0.94,
-        physics: paintPhysics,
+        physics: { ...paintPhysics, appleImpactBreakSpeed: 450 },
         onPop: popPaintBalloon
     },
     latex: {
         draw: drawLatexVector,
         spriteRevision: () => materialRevision("latex"),
-        spriteKey: object => object.color,
+        spriteKey: object => [object.color, object.foil],
         spriteHeight: 2.4,
         popAtMax: false,
         physics: latexPhysics
@@ -71,7 +74,7 @@ const definitions = {
         spriteKey: bubbleFrame,
         spriteHeight: 2.3,
         popAtMax: true,
-        physics: bubblePhysics
+        physics: { ...bubblePhysics, appleImpactBreakSpeed: 180 }
     },
     'hot-air': {
         draw: drawHotAirVector,
@@ -80,7 +83,7 @@ const definitions = {
         spriteHeight: 2.4,
         hitRadiusRatio: 0.94,
         popAtMax: false,
-        physics: hotAirPhysics,
+        physics: { ...hotAirPhysics, appleImpactBreakSpeed: 900 },
         onPop: igniteHotAir,
         updatePopped: updateHotAirFire,
         isFinished: object => object.fire?.removed ?? true

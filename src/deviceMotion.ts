@@ -26,34 +26,21 @@ export function onOrientation(event: DeviceOrientationEvent): void {
     targetTiltX = clamp(x / MAX_TILT, -1, 1)
 }
 
-// export async function enableDeviceMotion(): Promise<boolean> {
-//     if (!('DeviceOrientationEvent' in window)) {
-//         return false
-//     }
-//     if (enabled) return true
-
-
-
-//     const Orientation = DeviceOrientationEvent as typeof DeviceOrientationEvent & {
-//         requestPermission?: () => Promise<string>
-//     }
-
-//     if (typeof Orientation.requestPermission === 'function') {
-//         try {
-//             const permission = await Orientation.requestPermission()
-//             if (permission !== 'granted') {
-//                  return false
-//             }
-//         } catch (err: any) {
-//             return false
-//         }
-//     }
-
-//     window.addEventListener('deviceorientation', onOrientation)
-//     enabled = true
-
-//     return true
-// }
+let permissionPending: Promise<boolean> | null = null
+export function enableDeviceMotion(): Promise<boolean> {
+    if (enabled) return Promise.resolve(true)
+    if (permissionPending) return permissionPending
+    const Orientation = window.DeviceOrientationEvent as (typeof DeviceOrientationEvent & { requestPermission?: () => Promise<string> }) | undefined
+    if (!Orientation) return Promise.resolve(false)
+    const attach = (): boolean => { window.addEventListener('deviceorientation', onOrientation); enabled = true; return true }
+    if (!Orientation.requestPermission) return Promise.resolve(attach())
+    // Invoke synchronously within a tap, before any await loses user activation.
+    try {
+        permissionPending = Orientation.requestPermission().then(result => result === 'granted' ? attach() : false)
+            .catch(() => false).finally(() => { permissionPending = null })
+        return permissionPending
+    } catch { return Promise.resolve(false) }
+}
 
 export function updateDeviceMotion(dt: number): void {
     const smoothing = 1 - Math.exp(-4 * dt)

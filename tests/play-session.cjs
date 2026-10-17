@@ -3,6 +3,21 @@ const assert = require('node:assert/strict')
 const { PlaySession, parsePlaySettings } = require('../dist-ts/playSession')
 const settings = { enabled: true, timeLimit: 2, cooldown: 3 }
 
+test('Alternate is saved and switches activities once per cooldown, not on subsequent ticks', () => {
+    const selected = parsePlaySettings({ enabled: true, timeLimit: 0.1, cooldown: 1, cooldownApp: 'alternate' })
+    assert.equal(selected.cooldownApp, 'alternate')
+    const session = new PlaySession(selected, 0)
+    for (const [index, expected] of ['sketchpad', 'matching', 'sketchpad', 'matching'].entries()) {
+        const now = index * 100_000
+        session.returnToPlay(now)
+        session.objectCreated(now)
+        session.tick(now + 6000)
+        assert.equal(session.cooldownActivity, expected)
+        session.tick(now + 7000)
+        assert.equal(session.cooldownActivity, expected)
+    }
+})
+
 test('screensaver waits for the greater of ten minutes or the time limit, independently of cooldown', () => {
     for (const timeLimit of [2, 10, 15]) {
         const session = new PlaySession({ ...settings, timeLimit, cooldown: 0.1 }, 1000)

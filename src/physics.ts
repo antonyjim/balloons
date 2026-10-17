@@ -109,7 +109,8 @@ export function updateBalloonPhysics(
     dt: number,
     width: number,
     height: number,
-    config: BalloonConfig
+    config: BalloonConfig,
+    retainedSurface?: number | null
 ): void {
     if (dt <= 0) return
 
@@ -118,7 +119,7 @@ export function updateBalloonPhysics(
     updateDeviceMotion(dt)
 
     const options = collectOptions(balloons, config) as Map<Balloon, Readonly<PhysicsOptions>>
-    const surface = waterSurface(height, balloons)
+    const surface = retainedSurface === undefined ? waterSurface(height, balloons) : retainedSurface
     for (const balloon of balloons) if (!balloon.popped && balloon.finish === 'bubble') updateBubbleMotion(balloon, dt)
     for (const balloon of balloons) {
         if (balloon.popped) continue
@@ -289,6 +290,18 @@ function resolveScreenCollision(
 
 const impactVelocities = new Map<Balloon, { x: number, y: number, vx: number, vy: number }>()
 const collisionBreaks = new Set<Balloon>()
+const appleBreaks = new Set<Balloon>()
+
+function queueAppleImpact(apple: Balloon, target: Balloon, closingSpeed: number, physics: Readonly<PhysicsOptions>): void {
+    if (apple.finish !== 'apple' || apple.pointerId !== null || closingSpeed <= 0) return
+    const threshold = target.finish === 'watermelon'
+        ? physics.watermelonCollisionBreakSpeed * getWatermelonToughness(target, physics)
+        : physics.appleImpactBreakSpeed
+    if (closingSpeed >= threshold) {
+        collisionBreaks.add(target)
+        appleBreaks.add(target)
+    }
+}
 
 export function resolveBalloonCollisions(
     balloons: Balloon[],
@@ -296,6 +309,7 @@ export function resolveBalloonCollisions(
     options = collectOptions(balloons, config)
 ): void {
     collisionBreaks.clear()
+    appleBreaks.clear()
     impactVelocities.clear()
     let maxRadius = 0
     for (const balloon of balloons) {
@@ -363,8 +377,9 @@ export function resolveBalloonCollisions(
         }
     }
     // Finish identifying contacts before popping, so every fruit in a hard impact breaks.
-    for (const melon of collisionBreaks) popBalloon(melon)
+    for (const object of collisionBreaks) popBalloon(object, appleBreaks.has(object))
     collisionBreaks.clear()
+    appleBreaks.clear()
     impactVelocities.clear()
 }
 
@@ -391,6 +406,9 @@ function resolveBasketContact(owner: Balloon, other: Balloon, physics: Readonly<
         }
     } else { nx /= distance; ny /= distance }
     const wx = nx * c - ny * s, wy = nx * s + ny * c
+    const incoming = impactVelocities.get(other)!
+    const basketClosing = -((incoming.vx - basket.vx) * wx + (incoming.vy - basket.vy) * wy)
+    queueAppleImpact(other, owner, basketClosing, physics)
     const rx = qx * c - qy * s, ry = qx * s + qy * c
     const torque = rx * wy - ry * wx
     const inverseMass = 1 / Math.max(0.01, physics.basketMassRatio)
@@ -428,8 +446,17 @@ function resolveCollision(a: Balloon, b: Balloon, options: ReadonlyMap<Balloon, 
     const minDistance = (a.finish === 'bubble' ? bubbleRadiusAt(a, direction) : a.radius) * aPhysics.collisionRadiusRatio
         + (b.finish === 'bubble' ? bubbleRadiusAt(b, direction + Math.PI) : b.radius) * bPhysics.collisionRadiusRatio +
         (aPhysics.collisionPadding + bPhysics.collisionPadding) / 2
-    if ((a.finish === 'watermelon' && (b.finish === 'watermelon' || b.finish === 'apple'))
-        || (b.finish === 'watermelon' && a.finish === 'apple')) {
+    if (a.finish === 'apple' || b.finish === 'apple') {
+        const av = impactVelocities.get(a)!, bv = impactVelocities.get(b)!
+        const x = bv.x - av.x, y = bv.y - av.y
+        const distance = Math.hypot(x, y)
+        if (distance < minDistance) {
+            const closing = distance > 0.00001 ? -((bv.vx - av.vx) * x + (bv.vy - av.vy) * y) / distance : Math.hypot(bv.vx - av.vx, bv.vy - av.vy)
+            queueAppleImpact(a, b, closing, bPhysics)
+            queueAppleImpact(b, a, closing, aPhysics)
+        }
+    }
+    if (a.finish === 'watermelon' && b.finish === 'watermelon') {
         // Incoming poses and velocities preserve all contacts in a multi-melon impact.
         const av = impactVelocities.get(a)!
         const bv = impactVelocities.get(b)!

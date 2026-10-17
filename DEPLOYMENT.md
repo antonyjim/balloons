@@ -20,7 +20,7 @@ rejected service-worker response.
 Installed apps check at launch, once per minute while visible, on returning to
 the foreground, and on reconnecting. Failed registration is retried, and missing
 update metadata does not stop worker checks. A new build shows an update button
-at the bottom right, including in simple mode and the sketchpad. Applying it
+inside the background menu, accessible after expanding the controls. Applying it
 reloads the app; drawings and the current balloon scene are held in memory and
 are discarded by reload. Ordinary updates wait for that explicit action.
 If another tab applies an update, other open tabs offer a reload rather than

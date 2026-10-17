@@ -73,11 +73,11 @@
             height: clamp(36px, 8vh, 72px);
             z-index: 0;
             pointer-events: none;
-            background-color: #665338;
-            background-image: url('/textures/ground.png');
-            background-repeat: repeat-x;
-            background-size: auto calc(100% + 5px);
-            background-position: left -5px;
+            border-top: 3px solid #44372f;
+            background-color: #bd9565;
+            background-image: radial-gradient(ellipse at 18px 20px, #e2bf86 0 6px, transparent 7px), radial-gradient(ellipse at 65px 40px, #97734e 0 4px, transparent 5px), linear-gradient(#e5c58d 0 9px, #bd9565 9px);
+            background-repeat: repeat;
+            background-size: 96px 60px, 112px 60px, auto;
         }
 
         #app {
@@ -368,6 +368,7 @@
                     <button id="upload-background" type="button" style="display: none">Choose image?</button>
                     <small>Use a photo or a generated background.</small>
                     <button id="simple-mode" type="button">Simple mode</button>
+                    <button id="app-update" type="button" hidden>Update available · Reload</button>
                     <span id="background-status" role="status"></span>
                 </div>
                 <input id="background-file" type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/gif" hidden>
@@ -391,7 +392,6 @@
     </main>
     <section id="sketchpad-view" aria-label="Sketchpad" hidden></section>
     <section id="matching-view" aria-label="Letter and number matching" hidden></section>
-    <button id="app-update" class="action-button" type="button" hidden>Update available · Reload</button>
     <script src="/app.js"></script>
 </body>
 

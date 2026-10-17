@@ -112,10 +112,10 @@ test('random samples choose different authored silhouettes and transforms', () =
     assert.notEqual(a.scaleX, b.scaleX)
 })
 
-test('all ten distinct splatter silhouettes can be selected', () => {
-    assert.equal(paintSplatterShapes.length, 10)
-    assert.equal(new Set(paintSplatterShapes).size, 10)
+test('all expanded splatter silhouettes can be selected', () => {
+    assert.equal(paintSplatterShapes.length, 28)
+    assert.equal(new Set(paintSplatterShapes).size, 28)
     const indices = new Set()
-    for (let i = 0; i < 10; i++) indices.add(createPaintSplatter(balloon(), () => (i + 0.5) / 10).shape)
-    assert.equal(indices.size, 10)
+    for (let i = 0; i < paintSplatterShapes.length; i++) indices.add(createPaintSplatter(balloon(), () => (i + 0.5) / paintSplatterShapes.length).shape)
+    assert.equal(indices.size, 28)
 })

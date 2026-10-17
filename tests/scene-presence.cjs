@@ -1,0 +1,26 @@
+const { test } = require('node:test')
+const assert = require('node:assert/strict')
+const { ScenePresence, SCENERY_GRACE_MS, sceneGround } = require('../dist-ts/sceneGround')
+const { waterSurface } = require('../dist-ts/water')
+
+test('ground and water survive brief gaps, renew for replacement objects, then expire together', () => {
+    const scene = new ScenePresence()
+    assert.deepEqual(scene.update([], 0), { ground: false, water: false })
+    scene.update([{ finish: 'duck' }], 100)
+    const retained = scene.update([], 500)
+    assert.deepEqual(retained, { ground: true, water: true })
+    assert.equal(sceneGround(800, [], retained.ground).visible, true)
+    assert.notEqual(waterSurface(736, [], retained.water), null)
+    scene.update([{ finish: 'duck' }], 900)
+    assert.equal(scene.update([], 100 + SCENERY_GRACE_MS).water, true)
+    assert.deepEqual(scene.update([], 900 + SCENERY_GRACE_MS), { ground: false, water: false })
+})
+
+test('ground can remain after water expires, exited birds do not renew water, and reset clears grace', () => {
+    const scene = new ScenePresence()
+    scene.update([{ finish: 'duck' }], 0)
+    scene.update([{ finish: 'apple' }], 1500)
+    assert.deepEqual(scene.update([{ finish: 'duck', apple: { exited: true } }], 2500), { ground: true, water: false })
+    scene.reset()
+    assert.deepEqual(scene.update([], 2501), { ground: false, water: false })
+})

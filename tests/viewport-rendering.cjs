@@ -13,7 +13,7 @@ test('each frame clears the entire viewport at fractional and high pixel densiti
         const width = 1600, height = 1200, canvas = { width: width * dpr, height: height * dpr }
         let cleared
         const context = {
-            width, height, canvas, currentDpr: dpr, groundY: 1100, balloons: [],
+            width, height, canvas, currentDpr: dpr, groundY: 1100, balloons: [], scenery: { water: false },
             ctx: { clearRect(x, y, w, h) { cleared = [x, y, w * dpr, h * dpr] } },
             paintBalloon_1: { paintLayer: { draw() {} } },
             water_1: { waterSurface: () => null, drawWater() {}, waterTime: () => 0 }

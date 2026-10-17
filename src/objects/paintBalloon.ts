@@ -47,6 +47,8 @@ const silhouetteCache = new Map<number, Path2D>()
  */
 export class PaintLayer {
     private canvas: HTMLCanvasElement | null = null
+    private width = 0
+    private height = 0
     private pending: PaintSplatter[] = []
 
     add(balloon: Balloon): void {
@@ -69,20 +71,24 @@ export class PaintLayer {
     draw(ctx: CanvasRenderingContext2D, width: number, height: number, dpr: number): void {
         if (width <= 0 || height <= 0) return
         if (!this.canvas && this.pending.length === 0) return
-        const pixelWidth = Math.max(1, Math.round(width * dpr))
-        const pixelHeight = Math.max(1, Math.round(height * dpr))
+        const retainedWidth = Math.max(width, this.width)
+        const retainedHeight = Math.max(height, this.height)
+        const pixelWidth = Math.max(1, Math.round(retainedWidth * dpr))
+        const pixelHeight = Math.max(1, Math.round(retainedHeight * dpr))
         if (!this.canvas || this.canvas.width !== pixelWidth || this.canvas.height !== pixelHeight) {
             const resized = document.createElement('canvas')
             resized.width = pixelWidth
             resized.height = pixelHeight
             const resizedCtx = resized.getContext('2d')
             if (!resizedCtx) return
-            if (this.canvas) resizedCtx.drawImage(this.canvas, 0, 0, pixelWidth, pixelHeight)
+            if (this.canvas) resizedCtx.drawImage(this.canvas, 0, 0, this.width * dpr, this.height * dpr)
             this.canvas = resized
         }
+        this.width = retainedWidth
+        this.height = retainedHeight
         const paint = this.canvas.getContext('2d')
         if (!paint) return
-        paint.setTransform(pixelWidth / width, 0, 0, pixelHeight / height, 0, 0)
+        paint.setTransform(pixelWidth / this.width, 0, 0, pixelHeight / this.height, 0, 0)
         for (const splatter of this.pending) {
             paint.save()
             paint.translate(splatter.x, splatter.y)
@@ -99,7 +105,7 @@ export class PaintLayer {
             paint.restore()
         }
         this.pending.length = 0
-        ctx.drawImage(this.canvas, 0, 0, width, height)
+        ctx.drawImage(this.canvas, 0, 0, this.width, this.height)
     }
 }
 

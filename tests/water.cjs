@@ -15,6 +15,24 @@ function body(finish, x = 300, y = 100) {
 function simulate(objects, seconds = 10) {
     for (let i = 0; i < seconds * 120; i++) updateBalloonPhysics(objects, 1/120, 1000, 728, config)
 }
+test('ducks and geese bounce off side walls before takeoff but can fly out afterward', () => {
+    for (const duckVariant of ['duck', 'goose']) {
+        for (const [x, vx] of [[-100, -800], [1100, 800]]) {
+            const duck = body('duck', x, 400)
+            duck.duckVariant = duckVariant
+            duck.vx = vx
+            const physics = getPhysicsOptions(duck)
+            updateDuck(duck, 1/60, 1000, 728, physics)
+            assert.ok(duck.x >= duck.radius && duck.x <= 1000 - duck.radius)
+            assert.equal(duck.apple?.exited ?? false, false)
+            assert.equal(Math.sign(duck.vx), -Math.sign(vx))
+            duck.duckFlight.flying = true
+            duck.x = x
+            updateDuck(duck, 1/60, 1000, 728, physics)
+            assert.equal(duck.apple.exited, true)
+        }
+    }
+})
 test('bird press feedback stays while held and eases away without changing physical size', () => {
     const duck = body('duck')
     duck.duckPress = 1
@@ -30,11 +48,11 @@ test('bird press feedback stays while held and eases away without changing physi
     assert.ok(duck.duckPress < 0.001)
     assert.equal(duck.radius, 35)
 })
-test('birds choose a 30–45 second stay and then fly up and out, waiting for release', () => {
+test('birds choose a 30–90 second stay and then fly up and out, waiting for release', () => {
     const duck = body('duck', 400, 500)
     const physics = getPhysicsOptions(duck)
     updateDuck(duck, 1/60, 1000, 728, physics)
-    assert.ok(duck.duckFlight.delay >= 30 && duck.duckFlight.delay <= 45)
+    assert.ok(duck.duckFlight.delay >= 30 && duck.duckFlight.delay <= 90)
     duck.duckFlight.age = duck.duckFlight.delay - 0.1
     duck.pointerId = 1
     updateDuck(duck, 0.2, 1000, 728, physics)

@@ -9,8 +9,8 @@ export function waveHeight(x: number, time: number): number {
         + Math.sin(x * 0.021 - time * 1.65) * 2
 }
 
-export function waterSurface(ground: number, objects: readonly Balloon[]): number | null {
-    return objects.some(object => object.finish === 'duck' && !object.popped && !object.apple?.exited)
+export function waterSurface(ground: number, objects: readonly Balloon[], retained = false): number | null {
+    return retained || objects.some(object => object.finish === 'duck' && !object.popped && !object.apple?.exited)
         ? Math.max(0, ground - Math.min(165, ground * 0.23)) : null
 }
 

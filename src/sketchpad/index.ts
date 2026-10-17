@@ -33,6 +33,8 @@ const pointers = new Map<number, { last: Point, tool: Tool, color: string, size:
 let ratio = 1
 let width = 0
 let height = 0
+let retained: HTMLCanvasElement | null = null
+let retainedWidth = 0, retainedHeight = 0
 
 function resize() {
   if (!active) return
@@ -41,22 +43,29 @@ function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2)
   if (w === width && h === height && dpr === ratio) return
 
+  // Keep offscreen drawing at its original CSS size rather than stretching it
+  // to the new aspect ratio. The retained surface preserves cropped regions.
+  const nextWidth = Math.max(w, retainedWidth, width)
+  const nextHeight = Math.max(h, retainedHeight, height)
   const previous = document.createElement('canvas')
-  previous.width = canvas.width
-  previous.height = canvas.height
-  if (previous.width && previous.height) previous.getContext('2d')!.drawImage(canvas, 0, 0)
-
+  previous.width = Math.round(nextWidth * dpr)
+  previous.height = Math.round(nextHeight * dpr)
+  const saved = previous.getContext('2d')!
+  saved.setTransform(dpr, 0, 0, dpr, 0, 0)
+  saved.fillStyle = paper
+  saved.fillRect(0, 0, nextWidth, nextHeight)
+  if (retained) saved.drawImage(retained, 0, 0, retained.width, retained.height, 0, 0, retainedWidth, retainedHeight)
+  if (width && height) saved.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, width, height)
+  retained = previous
+  retainedWidth = nextWidth
+  retainedHeight = nextHeight
   width = w
   height = h
   ratio = dpr
   canvas.width = Math.round(w * dpr)
   canvas.height = Math.round(h * dpr)
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-  ctx.fillStyle = paper
-  ctx.fillRect(0, 0, w, h)
-  if (previous.width && previous.height) {
-    ctx.drawImage(previous, 0, 0, previous.width, previous.height, 0, 0, w, h)
-  }
+  ctx.setTransform(canvas.width / w, 0, 0, canvas.height / h, 0, 0)
+  ctx.drawImage(retained, 0, 0, retained.width, retained.height, 0, 0, retainedWidth, retainedHeight)
 }
 
 function point(event: PointerEvent): Point {
@@ -321,6 +330,8 @@ toolButtons.forEach(button => {
 })
 
 bindActivation(root.querySelector<HTMLButtonElement>('#clear')!, () => {
+  retained = null
+  retainedWidth = retainedHeight = 0
   ctx.save()
   ctx.globalAlpha = 1
   ctx.globalCompositeOperation = 'source-over'
@@ -357,6 +368,13 @@ bindActivation(useButton, () => {
 })
 window.addEventListener('blur', releasePointers)
 window.addEventListener('resize', resize)
+window.visualViewport?.addEventListener('resize', resize)
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(resize).observe(canvas)
+window.addEventListener('orientationchange', () => {
+  requestAnimationFrame(resize)
+  window.setTimeout(resize, 100)
+  window.setTimeout(resize, 350)
+})
 resize()
 
 return {

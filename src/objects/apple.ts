@@ -106,7 +106,7 @@ export function updateApple(apple: Balloon, dt: number, width: number, ground: n
 
 export function constrainApple(apple: Balloon, width: number, ground: number, physics: Readonly<PhysicsOptions>): void {
     // Side boundaries are open; retire the fruit only once its whole sprite has left.
-    if (apple.x + apple.radius * 1.1 < 0 || apple.x - apple.radius * 1.1 > width) {
+    if (apple.finish !== 'duck' && (apple.x + apple.radius * 1.1 < 0 || apple.x - apple.radius * 1.1 > width)) {
         (apple.apple ??= { exited: false }).exited = true
     }
     const floor = ground - apple.radius

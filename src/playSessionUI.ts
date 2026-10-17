@@ -66,7 +66,7 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
         <h2 id="play-settings-title">Play timer</h2>
         <label>Time limit <span>(minutes)</span><input name="timeLimit" type="number" min="0.1" max="240" step="0.1" required></label>
         <label>Cooldown <span>(minutes)</span><input name="cooldown" type="number" min="0.1" max="240" step="0.1" required></label>
-        <label>Cooldown activity<select name="cooldownApp"><option value="sketchpad">Drawing</option><option value="matching">Letters & numbers</option></select></label>
+        <label>Cooldown activity<select name="cooldownApp"><option value="sketchpad">Drawing</option><option value="matching">Letters & numbers</option><option value="alternate">Alternate</option></select></label>
         <label>Status<select name="enabled"><option value="false">Disabled</option><option value="true">Enabled</option></select></label>
         <p>The timer starts with the first new object. After an idle cooldown, the next object starts a fresh session. The screensaver waits for 10 minutes without a new object, or the time limit if longer.</p>
         <div class="play-settings-actions"><button type="button" data-cancel>Cancel</button><button type="submit">Save</button></div>
@@ -130,7 +130,7 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
         session.tick(now)
         if (before === 'play' && session.phase !== 'play') {
             onBreak()
-            location.hash = session.settings.cooldownApp === 'matching' ? '/matching' : '/sketchpad'
+            location.hash = `/${session.cooldownActivity}`
         }
         if (session.screensaverDue(now) && !idleShown && !dialog.open) {
             idleShown = true
@@ -144,7 +144,7 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
         resolveView(view) {
             queueMicrotask(sync)
             if (session.phase !== 'play' && view === 'balloons') {
-                const activity = session.settings.cooldownApp === 'matching' ? 'matching' : 'sketchpad'
+                const activity = session.cooldownActivity
                 history.replaceState(null, '', `#/${activity}`)
                 return activity
             }

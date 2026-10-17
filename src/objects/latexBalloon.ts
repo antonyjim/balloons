@@ -1,3 +1,4 @@
+import { drawFoilBalloon } from './foilBalloon'
 import { drawBalloonMaterial } from './balloonMaterials'
 import type { PhysicsOptions } from "./physicsOptions"
 import type { Balloon } from "./balloonTypes"
@@ -7,6 +8,7 @@ export function drawLatexVector(
     balloon: Balloon,
     style: { widthRatio?: number, opaque?: boolean } = {}
 ): void {
+    if (balloon.foil && !style.opaque) { drawFoilBalloon(ctx, balloon); return }
     const r = balloon.radius
     const w = r * (style.widthRatio ?? 0.78)
     const rgb = colorToRgb(ctx, balloon.color)

@@ -77,6 +77,7 @@ type BalloonSprite = {
 const spriteCache = new Map<string, BalloonSprite>()
 const atlas = new SpriteAtlas()
 interface ObjectSprite {
+    foil: boolean | undefined
     duckVariant: Balloon['duckVariant']
     bubbleFrame: number
     sprite: BalloonSprite
@@ -89,6 +90,7 @@ interface ObjectSprite {
 const objectSprites = new WeakMap<Balloon, ObjectSprite>()
 
 function matchesAppearance(balloon: Balloon, cached: ObjectSprite): boolean {
+    if (balloon.foil !== cached.foil) return false
     if (balloon.duckVariant !== cached.duckVariant) return false
     if (balloon.finish === 'bubble' && bubbleFrame(balloon) !== cached.bubbleFrame) return false
     if (balloon.finish !== cached.finish || balloon.color !== cached.color || balloon.panelCount !== cached.panelCount) return false
@@ -140,7 +142,7 @@ export function drawBalloon(
             }
         }
         sprite = shared
-        objectSprites.set(balloon, { duckVariant: balloon.duckVariant, sprite, bubbleFrame: bubbleFrame(balloon), revision: definition.spriteRevision?.() ?? 0, finish: balloon.finish, color: balloon.color,
+        objectSprites.set(balloon, { foil: balloon.foil, duckVariant: balloon.duckVariant, sprite, bubbleFrame: bubbleFrame(balloon), revision: definition.spriteRevision?.() ?? 0, finish: balloon.finish, color: balloon.color,
             panelCount: balloon.panelCount, panelColors: balloon.panelColors?.slice() })
     }
     if (finish === 'hot-air') {
@@ -293,8 +295,8 @@ export function containsPoint(
 }
 
 
-export function popBalloon(balloon: Balloon): void {
-    if (balloon.popped || (balloon.finish === 'apple' || balloon.finish === 'duck')) return
+export function popBalloon(balloon: Balloon, hardAppleImpact = false): void {
+    if (balloon.popped || (!hardAppleImpact && (balloon.finish === 'apple' || balloon.finish === 'duck'))) return
     playPopSound(balloon.finish)
     balloon.growing = false
     balloon.pointerId = null
@@ -305,7 +307,7 @@ export function popBalloon(balloon: Balloon): void {
 
 
 export function isBalloonFinished(balloon: Balloon, config: BalloonConfig): boolean {
-    if ((balloon.finish === 'apple' || balloon.finish === 'duck')) return balloon.apple?.exited ?? false
+    if (!balloon.popped && (balloon.finish === 'apple' || balloon.finish === 'duck')) return balloon.apple?.exited ?? false
     if (!balloon.popped) return false
     const definition = getObjectDefinition(balloon.finish)
     return definition.isFinished ? definition.isFinished(balloon) : balloon.popTime >= config.popDuration

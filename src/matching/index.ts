@@ -37,14 +37,45 @@ export function mountMatching(host: HTMLElement): MatchingApp {
         piece.style.left = `${box.left + box.width / 2}px`
         piece.style.top = `${box.top + box.height / 2}px`
     }
-    const speak = (symbol: string): void => {
+    let utteranceInFlight: SpeechSynthesisUtterance | null = null
+    let touchInteraction = false
+    let queuedSpeech: string | null = null
+    const speakNow = (symbol: string): void => {
         if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') return
+        const synth = window.speechSynthesis
         const utterance = new SpeechSynthesisUtterance(symbol)
         utterance.lang = 'en-US'
         utterance.rate = 1.05
         utterance.pitch = 1.25
-        try { window.speechSynthesis.cancel(); window.speechSynthesis.speak(utterance) } catch { /* Visual feedback remains available. */ }
+        const voices = synth.getVoices?.() ?? []
+        const english = voices.filter(voice => /^en(?:-|_)/i.test(voice.lang))
+        utterance.voice = english.find(voice => voice.localService) ?? english[0] ?? null
+        const done = (): void => { if (utteranceInFlight === utterance) utteranceInFlight = null }
+        utterance.onend = done
+        utterance.onerror = done
+        try {
+            // Retain the utterance until completion; avoid canceling an idle Safari
+            // speech queue immediately before asking it to start.
+            if (synth.speaking || synth.pending) synth.cancel()
+            utteranceInFlight = utterance
+            synth.resume?.()
+            synth.speak(utterance)
+        } catch { done() }
     }
+    const speak = (symbol: string): void => {
+        if (touchInteraction) queuedSpeech = symbol
+        else speakNow(symbol)
+    }
+    root.addEventListener?.('pointerdown', event => { touchInteraction = (event as PointerEvent).pointerType === 'touch' }, true)
+    root.addEventListener?.('touchend', () => {
+        touchInteraction = false
+        if (queuedSpeech !== null && active) {
+            const symbol = queuedSpeech
+            queuedSpeech = null
+            speakNow(symbol)
+        } else if ('speechSynthesis' in window) window.speechSynthesis.resume?.()
+    }, { capture: true, passive: true })
+    root.addEventListener?.('touchcancel', () => { touchInteraction = false; queuedSpeech = null })
     const place = (symbol: string): boolean => {
         if (!game.place(symbol)) return false
         const slot = shelves.querySelector<HTMLButtonElement>(`[data-symbol="${symbol}"]`)!
@@ -130,7 +161,12 @@ export function mountMatching(host: HTMLElement): MatchingApp {
     return { setActive(value) {
         cancel()
         active = value
-        if (!active && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+        if (!active) {
+            queuedSpeech = null
+            touchInteraction = false
+            utteranceInFlight = null
+            if ('speechSynthesis' in window) window.speechSynthesis.cancel()
+        }
         if (active) requestAnimationFrame(home)
     } }
 }

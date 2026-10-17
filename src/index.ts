@@ -1,3 +1,4 @@
+import { HiddenExitSequence, exitAppFullscreen } from './hiddenExit'
 import { setupPlaySession } from './playSessionUI'
 import { randomDuckAppearance } from './objects/duck'
 import { drawWater, waterSurface, waterTime } from './water'
@@ -6,7 +7,7 @@ import { resetPopsDue, RESET_DEADLINE_SECONDS } from './resetTiming'
 import { maximumRadius, availableRadius, enforceSizeLimits } from './objects/sizeLimits'
 import { setupAppUpdates } from './appUpdates'
 import { containsBasketPoint, moveHotAirAssembly } from './objects/hotAirBalloon'
-import { sceneGround } from './sceneGround'
+import { sceneGround, ScenePresence } from './sceneGround'
 import { bindActivation } from './activation'
 import { preloadBalloonMaterials } from './objects/balloonMaterials'
 import { sampleAppleDrag, releaseAppleThrow } from './objects/apple'
@@ -21,7 +22,7 @@ import {
     updateBalloon
 } from './objects/balloon'
 import { popWithForce, updateBalloonPhysics, updateBreeze } from './physics'
-import { onOrientation } from './deviceMotion'
+import { enableDeviceMotion } from './deviceMotion'
 import { BalloonFinish, ThemeManager } from './theme/ThemeManager'
 import { BackgroundRenderer } from './theme/background'
 import { getRandomPanelColors } from './theme/colors'
@@ -31,6 +32,7 @@ import {
     setBurnerSoundLevel,
     stopBurnerSound,
     unlockAudio,
+    setupAudioGestures,
     startInflateSound,
     stopInflateSound,
 } from './audio'
@@ -58,6 +60,7 @@ void preloadSounds().catch(error => console.warn("Sound preload failed:", error)
 const isMobile = window.matchMedia('(pointer: coarse)').matches
 
 setupAppUpdates()
+setupAudioGestures()
 
 canvas.addEventListener('contextmenu', e => {
     e.preventDefault()
@@ -70,7 +73,7 @@ const balloonConfig: BalloonConfig = {
     maxRadius: isMobile ? 100 : 190,
     maxRadiusScreenRatio: isMobile ? 0.24 : 0.27,
     maxObjectAreaRatio: 0.12,
-    maxSceneAreaRatio: isMobile ? 0.65 : 0.8,
+    maxSceneAreaRatio: isMobile ? 1.25 : 1.5,
     growthRate: isMobile ? 45 : 80,
     maxScreenRatio: isMobile ? 0.65 : 1 / 2.75
 }
@@ -98,6 +101,8 @@ themeManager.subscribe(applyTheme)
 let width = 0
 let height = 0
 let groundY = 0
+const scenePresence = new ScenePresence()
+let scenery = { ground: false, water: false }
 let previousCount = -1
 let lastTime = 0
 
@@ -109,47 +114,30 @@ let resetting = false
 
 
 const counterEl = document.getElementById('counter')
+const hiddenExit = new HiddenExitSequence()
 if (counterEl) bindActivation(counterEl, () => {
-    let enabled = false
-    const Orientation = DeviceOrientationEvent as typeof DeviceOrientationEvent & {
-        requestPermission?: () => Promise<string>
-    }
-
-    if (typeof Orientation.requestPermission === 'function') {
-        Orientation.requestPermission()
-            .then(permission => {
-                console.log('Orientation permission:', permission)
-
-                if (permission === 'granted') {
-                    enabled = true
-                    window.addEventListener(
-                        'deviceorientation',
-                        onOrientation
-                    )
-                }
-            })
-            .catch(console.error)
-    } else {
-        window.addEventListener(
-            'deviceorientation',
-            onOrientation
-        )
-        enabled = true
-    }
-
-    if (!enabled && counterEl) {
-        counterEl.style = "color: red"
-    } else {
-        counterEl.style = "color: green"
-    }
+    hiddenExit.press('counter', performance.now())
+    void enableDeviceMotion().then(enabled => {
+        counterEl.style.color = enabled ? 'green' : 'red'
+        counterEl.title = enabled ? 'Motion enabled' : 'Motion unavailable or permission denied'
+    })
 })
+// iOS requires a gesture to ask for sensor access. This also works in simple mode.
+let motionRequested = false
+const requestMotion = (event: Event): void => {
+    if (!event.isTrusted || motionRequested) return
+    motionRequested = true
+    void enableDeviceMotion()
+}
+for (const name of ['touchend', 'pointerup', 'click']) document.addEventListener(name, requestMotion, { capture: true, passive: true })
 
 let currentDpr = 0
 let currentPixelWidth = 0
 let currentPixelHeight = 0
 
 function syncGround(): void {
-    const state = sceneGround(height, balloons)
+    scenery = scenePresence.update(balloons, performance.now())
+    const state = sceneGround(height, balloons, scenery.ground)
     groundY = state.y
     const ground = document.getElementById('ground')
     if (ground) { ground.hidden = !state.visible; ground.style.height = `${height - groundY}px` }
@@ -204,6 +192,7 @@ function reset(): void {
     paintLayer.clear()
     stopBurnerSound()
     balloons.length = 0
+    scenePresence.reset()
     syncGround()
     activePointers.clear()
     stopInflateSound()
@@ -272,7 +261,7 @@ function update(dt: number): void {
         updateBalloon(balloon, dt, width, groundY, balloonConfig, balloons)
     }
 
-    updateBalloonPhysics(balloons, dt, width, groundY, balloonConfig)
+    updateBalloonPhysics(balloons, dt, width, groundY, balloonConfig, waterSurface(groundY, balloons, scenery.water))
 
     for (let i = balloons.length - 1; i >= 0; i--) {
         const balloon = balloons[i]
@@ -306,7 +295,7 @@ function render(): void {
     // The context already maps CSS coordinates to backing pixels, including DPR < 1.
     ctx.clearRect(0, 0, width, height)
     paintLayer.draw(ctx, width, height, currentDpr)
-    const surface = waterSurface(groundY, balloons)
+    const surface = waterSurface(groundY, balloons, scenery.water)
     drawWater(ctx, width, groundY, surface, waterTime())
 
     for (const balloon of balloons) {
@@ -439,6 +428,7 @@ canvas.addEventListener('pointerdown', event => {
         color: themeManager.randomBalloonColor(finish),
         panelColors: getRandomPanelColors(themeManager.current.theme, Math.max(1, Math.floor(Math.random() * 5))),
         finish,
+        foil: finish === 'latex' && Math.random() < 0.18,
         angle: (finish === "hot-air" || finish === "duck") ? 0 : Math.random() * Math.PI * 2,
         angularVelocity: 0,
         growing: finish !== "apple",
@@ -577,12 +567,21 @@ document.addEventListener('visibilitychange', () => {
 })
 
 window.addEventListener('resize', resize)
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(resize).observe(canvas)
+window.addEventListener('orientationchange', () => {
+    requestAnimationFrame(resize)
+    window.setTimeout(resize, 100)
+    window.setTimeout(resize, 350)
+})
 window.visualViewport?.addEventListener(
     'resize',
     resize
 )
 const resetButton = document.getElementById('reset')
-if (resetButton) bindActivation(resetButton, resetBalloons)
+if (resetButton) bindActivation(resetButton, () => {
+    if (hiddenExit.press('reset', performance.now())) exitAppFullscreen()
+    else resetBalloons()
+})
 const sketchLink = document.querySelector<HTMLAnchorElement>('.sketch-button')
 if (sketchLink) bindActivation(sketchLink)
 // background.addEventListener('load', drawBackground)
