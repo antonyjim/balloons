@@ -22,9 +22,9 @@ function validThemeMode(value: string | null): ThemeMode {
 }
 
 function validFinishMode(value: string | null): FinishMode {
-    return value === 'latex' || value === 'hot-air' || value === 'bubble'
+    return value === 'latex' || value === 'hot-air' || value === 'bubble' || value === 'paint'
         ? value
-        : 'latex'
+        : 'auto'
 }
 
 export class ThemeManager {
@@ -39,7 +39,8 @@ export class ThemeManager {
     private readonly finishes: BalloonFinish[] = [
         'latex',
         'hot-air',
-        'bubble'
+        'bubble',
+        'paint'
     ]
     private readonly handleVisibility = () => this.refresh()
 
@@ -63,7 +64,7 @@ export class ThemeManager {
             mode: this.mode,
             finishMode: this.finishMode,
             theme,
-            finish: this.randomFinish
+            finish: this.finishMode === 'auto' ? this.randomFinish : this.finishMode
         }
     }
 
@@ -77,11 +78,6 @@ export class ThemeManager {
 
     refresh(): void {
         const next = this.resolve()
-        console.log({
-            mode: this.mode,
-            finishMode: this.finishMode,
-            themeFinish: next.finish
-        })
         if (next.theme.id === this.state.theme.id && next.mode === this.state.mode && next.finish === this.state.finish && next.finishMode === this.state.finishMode) return
         this.state = next
 

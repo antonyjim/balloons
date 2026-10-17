@@ -1,4 +1,4 @@
-const CACHE = 'balloons-v1'
+const CACHE = 'balloons-v3-wind'
 
 const ASSETS = [
     '/',

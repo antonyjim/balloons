@@ -12,7 +12,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Balloons">
 
-    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
     <link rel="icon" href="/favicon.ico">
     <title>Balloons</title>
 
@@ -36,6 +39,8 @@
 
         canvas {
             display: block;
+            position: fixed;
+            inset: 0;
             width: 100%;
             height: 100%;
             touch-action: none;
@@ -65,6 +70,8 @@
             left: 16px;
             display: flex;
             align-items: stretch;
+            flex-wrap: wrap;
+            max-width: calc(100vw - 32px);
             gap: 10px;
             z-index: 10;
             /* pointer-events: none; */
@@ -117,10 +124,11 @@
         }
 
         .reset-card {
+            gap: 5px;
             padding: 5px;
         }
 
-        #reset {
+        .action-button {
             display: flex;
             align-items: center;
             justify-content: center;
@@ -148,19 +156,55 @@
                 box-shadow 150ms ease;
         }
 
-        #reset:hover {
+        .action-button:hover {
             background: #5134d4;
             box-shadow: 0 3px 10px rgba(98, 70, 234, 0.25);
         }
 
-        #reset:active {
+        .action-button:active {
             transform: scale(0.96);
         }
 
-        #reset:focus-visible {
+        .action-button:focus-visible {
             outline: 3px solid rgba(98, 70, 234, 0.35);
             outline-offset: 3px;
         }
+
+        .object-picker { position: relative; }
+        #object-type { padding: 0 10px; gap: 4px; }
+        #object-type-icon { background: rgb(250, 250, 250); border-radius: 5px; }
+        #object-menu {
+            position: absolute;
+            top: calc(100% + 10px);
+            left: 0;
+            min-width: 186px;
+            padding: 6px;
+            border: 1px solid #e4ddfa;
+            border-radius: 14px;
+            background: #fff;
+            box-shadow: 0 8px 28px rgba(49, 27, 112, 0.2);
+        }
+        #object-menu[hidden] { display: none; }
+        #object-menu button {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            min-height: 44px;
+            padding: 8px 10px;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: #4930b0;
+            font: inherit;
+            font-size: 13px;
+            text-align: left;
+            cursor: pointer;
+        }
+        #object-menu button:hover, #object-menu button:focus-visible { background: #f1edff; }
+        #object-menu button:focus-visible { outline: 2px solid #6246ea; outline-offset: -2px; }
+        #object-menu button[aria-checked="true"] { background: #e9e2ff; font-weight: 650; }
+        #object-menu button[aria-checked="true"]::after { content: ''; margin-left: auto; width: 6px; height: 6px; border-radius: 50%; background: #6246ea; }
 
         .draw-button {
             display: grid;
@@ -174,7 +218,9 @@
             text-decoration: none;
         }
 
-        .draw-button svg {
+        .sketch-button { text-decoration: none; }
+
+        .sketch-button svg {
             width: 22px;
             height: 22px;
             fill: none;
@@ -214,7 +260,38 @@
         </div>
 
         <div class="card reset-card">
-            <button id="reset" type="button">
+            <a class="action-button sketch-button" href="https://sketchpad.anthonyjund.com" aria-label="Open drawing canvas">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 19l-7 2 2-7L17 4a2.8 2.8 0 0 1 4 4L12 19Z" />
+                    <path d="m15 6 3 3" />
+                </svg>
+                
+            </a>
+            <div class="object-picker" id="object-picker">
+                <button id="object-type" class="action-button" type="button" aria-label="Choose object type"
+                    aria-haspopup="menu" aria-expanded="false" aria-controls="object-menu" title="Choose object type">
+                    <img id="object-type-icon" src="/icons/objects/auto.svg" width="24" height="26" alt="">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="m2 3 3 3 3-3"/></svg>
+                </button>
+                <div id="object-menu" role="menu" aria-label="Object type" hidden>
+                    <button type="button" role="menuitemradio" aria-checked="false" data-finish="auto" tabindex="-1">
+                        <img src="/icons/objects/auto.svg" width="26" height="28" alt="">Auto
+                    </button>
+                    <button type="button" role="menuitemradio" aria-checked="false" data-finish="latex" tabindex="-1">
+                        <img src="/icons/objects/latex.svg" width="26" height="28" alt="">Balloons
+                    </button>
+                    <button type="button" role="menuitemradio" aria-checked="false" data-finish="bubble" tabindex="-1">
+                        <img src="/icons/objects/bubble.svg" width="26" height="28" alt="">Bubbles
+                    </button>
+                    <button type="button" role="menuitemradio" aria-checked="false" data-finish="hot-air" tabindex="-1">
+                        <img src="/icons/objects/hot-air.svg" width="26" height="28" alt="">Hot air
+                    </button>
+                    <button type="button" role="menuitemradio" aria-checked="false" data-finish="paint" tabindex="-1">
+                        <img src="/icons/objects/paint.svg" width="26" height="28" alt="">Paint balloons
+                    </button>
+                </div>
+            </div>
+            <button id="reset" class="action-button" type="button">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M3 12a9 9 0 1 0 3-6.7" />
@@ -223,12 +300,6 @@
                 Reset
             </button>
         </div>
-        <a class="draw-button" href="https://sketchpad.anthonyjund.com" aria-label="Open drawing canvas">
-            <svg viewBox="0 0 24 24">
-                <path d="M12 19l-7 2 2-7L17 4a2.8 2.8 0 0 1 4 4L12 19Z" />
-                <path d="m15 6 3 3" />
-            </svg>
-        </a>
     </div>
 
     <script src="/app.js"></script>

@@ -1,18 +1,25 @@
+import { paintLayer } from './objects/paintBalloon'
+import { setupObjectPicker } from './objectPicker'
+import { getPhysicsOptions } from './objects/objectDefinitions'
 import {
-    Balloon,
-    BalloonConfig,
     containsPoint,
     defaultBalloonConfig,
     drawBalloon,
-    popBalloon,
     updateBalloon
-} from './balloon'
-import { popWithForce, RELEASE_IMPULSE, updateBalloonPhysics, updateBreeze } from './physics'
-import { startInflateSound, stopInflateSound } from './audio'
+} from './objects/balloon'
+import { popWithForce, updateBalloonPhysics, updateBreeze } from './physics'
 import { onOrientation } from './deviceMotion'
-import { ThemeManager } from './theme/ThemeManager'
+import { BalloonFinish, ThemeManager } from './theme/ThemeManager'
 import { BackgroundRenderer } from './theme/background'
 import { getRandomPanelColors } from './theme/colors'
+import {
+    preloadSounds,
+    unlockAudio,
+    startInflateSound,
+    stopInflateSound,
+} from './audio'
+import { Balloon, BalloonConfig } from './objects/balloonTypes'
+
 
 function requireCanvas(): HTMLCanvasElement {
     const element = document.querySelector<HTMLCanvasElement>('#app')
@@ -28,6 +35,7 @@ function requireContext(element: HTMLCanvasElement): CanvasRenderingContext2D {
 
 const canvas = requireCanvas()
 const ctx = requireContext(canvas)
+void preloadSounds().catch(error => console.warn("Sound preload failed:", error))
 
 const isMobile = window.matchMedia('(pointer: coarse)').matches
 
@@ -53,19 +61,20 @@ const balloons: Balloon[] = []
 const activePointers = new Map<number, Balloon>()
 const themeManager = new ThemeManager()
 const background = new BackgroundRenderer()
+setupObjectPicker(themeManager)
 
 function applyTheme(): void {
     const theme = themeManager.current
     const label = document.getElementById("counter-label")
-    
+
     if (label) label.innerText = theme.finish == "bubble" ? "BUBBLES" : "BALLOONS"
 
     void background.setBackground(theme.theme.background)
 }
 
-themeManager.setMode('auto')
 applyTheme()
 themeManager.subscribe(applyTheme)
+
 
 let width = 0
 let height = 0
@@ -121,8 +130,11 @@ let currentPixelWidth = 0
 let currentPixelHeight = 0
 
 function resize(): void {
-    const nextWidth = window.innerWidth
-    const nextHeight = window.innerHeight
+    const rect = canvas.getBoundingClientRect()
+
+    const nextWidth = rect.width
+    const nextHeight = rect.height
+
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
 
     const pixelWidth = Math.round(nextWidth * dpr)
@@ -136,9 +148,9 @@ function resize(): void {
         return
     }
 
+    currentDpr = dpr
     currentPixelWidth = pixelWidth
     currentPixelHeight = pixelHeight
-    currentDpr = dpr
 
     width = nextWidth
     height = nextHeight
@@ -146,14 +158,19 @@ function resize(): void {
     canvas.width = pixelWidth
     canvas.height = pixelHeight
 
-    canvas.style.width = `${width}px`
-    canvas.style.height = `${height}px`
-    canvas.style.touchAction = 'none'
-
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.setTransform(
+        pixelWidth / width,
+        0,
+        0,
+        pixelHeight / height,
+        0,
+        0
+    )
 }
 
+
 function reset(): void {
+    paintLayer.clear()
     balloons.length = 0
     activePointers.clear()
     stopInflateSound()
@@ -192,11 +209,13 @@ function updateReset(dt: number): void {
         const balloon = resetQueue.pop()!
 
         if (!balloon.popped) {
-            popBalloon(balloon)
+            popWithForce(balloons, balloon)
         }
     }
 
-    if (resetQueue.length === 0) {
+    if (resetQueue.length === 0 && balloons.every(balloon =>
+        balloon.popped && balloon.popTime >= balloonConfig.popDuration
+    )) {
         reset()
         resetting = false
     }
@@ -212,11 +231,7 @@ function update(dt: number): void {
     updateReset(dt)
 
     for (const balloon of balloons) {
-        updateBalloon(balloon, dt, width, height, {
-            ...balloonConfig,
-            popAtMax: themeManager.current.finish == "bubble"
-        },
-            balloons)
+        updateBalloon(balloon, dt, width, height, balloonConfig, balloons)
     }
 
     updateBalloonPhysics(balloons, dt, width, height, balloonConfig)
@@ -244,8 +259,8 @@ function update(dt: number): void {
 // }
 
 function render(): void {
-    ctx.resetTransform()
     ctx.clearRect(0, 0, canvas.width, canvas.height)
+    paintLayer.draw(ctx, width, height, currentDpr)
 
     for (const balloon of balloons) {
         drawBalloon(ctx, balloon)
@@ -290,8 +305,6 @@ function frame(time: number): void {
             renderMs: +(profileRender / profileFrames).toFixed(2)
         })
 
-        console.log(balloons)
-
         profileFrames = 0
         profileUpdate = 0
         profileRender = 0
@@ -301,16 +314,31 @@ function frame(time: number): void {
     requestAnimationFrame(frame)
 }
 
-function canvasPosition(event: PointerEvent): { x: number, y: number } {
+function canvasPosition(
+    event: PointerEvent
+): { x: number, y: number } {
     const rect = canvas.getBoundingClientRect()
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top }
+
+    return {
+        x: (event.clientX - rect.left) * width / rect.width,
+        y: (event.clientY - rect.top) * height / rect.height
+    }
 }
 
 canvas.addEventListener('contextmenu', event => event.preventDefault())
 
+let runAudioInit = true
+
 canvas.addEventListener('pointerdown', event => {
+    if (runAudioInit) {
+        runAudioInit = false
+        unlockAudio(true)
+    } else {
+        unlockAudio()
+    }
     event.preventDefault()
     if (resetting) return
+
     const { x, y } = canvasPosition(event)
 
     for (let i = balloons.length - 1; i >= 0; i--) {
@@ -345,7 +373,7 @@ canvas.addEventListener('pointerdown', event => {
     balloons.push(balloon)
     activePointers.set(event.pointerId, balloon)
     canvas.setPointerCapture(event.pointerId)
-    if (activePointers.size === 1) void startInflateSound()
+    if (activePointers.size === 1) startInflateSound(balloon.finish)
     updateCounter()
 })
 
@@ -374,7 +402,8 @@ function releaseBalloon(pointerId: number): void {
 
     if (!balloon.popped) {
         const angle = Math.random() * Math.PI * 2
-        const impulse = Math.max(RELEASE_IMPULSE / 2, RELEASE_IMPULSE * (0.9 + Math.random() * 0.5))
+        const { releaseImpulse } = getPhysicsOptions(balloon, balloonConfig)
+        const impulse = Math.max(releaseImpulse / 2, releaseImpulse * (0.9 + Math.random() * 0.5))
         balloon.vx += Math.cos(angle) * impulse
         balloon.vy += Math.sin(angle) * impulse
         balloon.angularVelocity += (Math.random() - 0.5) * 0.5
@@ -382,26 +411,64 @@ function releaseBalloon(pointerId: number): void {
     if (activePointers.size === 0) stopInflateSound()
 }
 
+let lastInflating = false
+let lastInflateFinish: BalloonFinish | null = null
+
 function syncInflateSound(): void {
-    const inflating = balloons.some(
+    const balloon = balloons.find(
         balloon =>
             balloon.growing &&
             !balloon.popped &&
             balloon.pointerId !== null
     )
 
-    if (!inflating) {
-        stopInflateSound()
+    const finish = balloon?.finish ?? 'latex'
+    const inflating = !!balloon && !document.hidden
+
+    if (
+        inflating === lastInflating &&
+        (!inflating || finish === lastInflateFinish)
+    ) {
+        return
+    }
+
+    lastInflating = inflating
+    lastInflateFinish = inflating ? finish : null
+
+    if (inflating) {
+        startInflateSound(finish)
+    }
+    else {
+        stopInflateSoundFactory()()
     }
 }
 
+function stopInflateSoundFactory() {
+    return () => {
+        stopInflateSound(activePointers)
+    }
+}
 
 
 canvas.addEventListener('pointerup', event => releaseBalloon(event.pointerId))
 canvas.addEventListener('pointercancel', event => releaseBalloon(event.pointerId))
 canvas.addEventListener('lostpointercapture', event => releaseBalloon(event.pointerId))
 
+// Backgrounding
+window.addEventListener('blur', stopInflateSoundFactory())
+window.addEventListener('pagehide', stopInflateSoundFactory())
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        stopInflateSoundFactory()()
+    }
+})
+
 window.addEventListener('resize', resize)
+window.visualViewport?.addEventListener(
+    'resize',
+    resize
+)
 document.getElementById('reset')?.addEventListener('click', resetBalloons)
 // background.addEventListener('load', drawBackground)
 // background.src = '/bg.png'

@@ -13,12 +13,12 @@ module.exports = {
   },
 
   plugins: [
-        new CopyWebpackPlugin({
-            patterns: [
-                { from: 'public', to: '.' }
-            ]
-        })
-    ],
+    new CopyWebpackPlugin({
+      patterns: [
+        { from: 'public', to: '.' }
+      ]
+    })
+  ],
 
 
   devtool: 'source-map',

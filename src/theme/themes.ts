@@ -66,9 +66,17 @@ export const themes = {
             '#7b2cbf', '#5a189a', '#4895ef', '#4cc9f0',
             '#56cfe1', '#72efdd', '#80ffdb', '#c77dff',
             '#e0aaff', '#f72585', '#b5179e', '#7209b7',
-            '#4361ee', '#4ea8de', '#64dfdf', '#80ed99',
+            '#4361ee', '#4ea8de', '#64dfdf', '#155724',
             '#a3c4f3', '#b9fbc0', '#ffc6ff', '#ffd6ff',
-            '#90dbf4', '#98f5e1', '#a9def9', '#caffbf'
+            '#90dbf4', '#98f5e1', '#a9def9', '#caffbf',
+            '#f4ac65', '#f06f85', '#b87bdd', '#ffdd85',
+            '#ff9e7a', '#ffb3c1', '#c79bff', '#ffd6a5',
+            '#ffc09f', '#f497b6', '#cdb4db', '#ffe29a',
+            '#ff8fab', '#f6bd60', '#e5989b', '#b8c0ff',
+            '#ffd166', '#f28482', '#d0a2f7', '#f7b267',
+            '#ffcad4', '#f4a261', '#e76f51', '#e9c46a',
+            '#f1a7c4', '#c77dff', '#ffcb77', '#ffaaa5',
+            '#f2c6de', '#f7a072', '#d291bc', '#ffe5a5'
         ],
         finish: 'latex'
     }

@@ -3,6 +3,7 @@ export type BalloonFinish =
     | 'latex'
     | 'hot-air'
     | 'bubble'
+    | 'paint'
 
 export type ThemeMode = 'auto' | ThemeId
 export type FinishMode = 'auto' | BalloonFinish

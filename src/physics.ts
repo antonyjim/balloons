@@ -1,32 +1,8 @@
-import { playPopSound } from './audio'
-import { Balloon, BalloonConfig, popBalloon } from './balloon'
+import type { PhysicsOptions } from './objects/physicsOptions'
+import { Balloon, BalloonConfig } from './objects/balloonTypes'
+import { popBalloon } from './objects/balloon'
+import { getPhysicsOptions } from './objects/objectDefinitions'
 import { getDeviceTilt, updateDeviceMotion } from './deviceMotion'
-
-const MAX_SPEED = 2000
-const MAX_ANGULAR_SPEED = 2.5
-const ROTATION_TRANSFER = 0.0015
-const WALL_RETENTION = 0.78
-const POP_RADIUS_MULTIPLIER = 4
-const POP_IMPULSE = 5000
-const PUSH_BASE_IMPULSE = 45
-const PUSH_PENETRATION_IMPULSE = 2
-
-export const RELEASE_IMPULSE = 525
-// Smooth, low-frequency atmospheric acceleration (pixels/second squared).
-const BUOYANCY = 60
-const BREEZE_FREQUENCY = 0.35
-const TILT_FORCE = 110
-
-const LINEAR_DRAG = 1.8
-const ANGULAR_DRAG = 2.4
-
-const ROCK_STIFFNESS = 2.5
-const ROCK_DAMPING = 3.8
-const ROCK_AMPLITUDE = 0.085
-const ROCK_FREQUENCY = 0.9
-const TILT_LEAN = 0.22
-
-const MAX_LEAN = 0.4
 
 let ambientTime = 0
 
@@ -58,27 +34,28 @@ export function updateBreeze(dt: number): void {
         (breezeTarget - BREEZE_STRENGTH) * smoothing
 }
 
-function clampVelocity(balloon: Balloon): void {
+function clampVelocity(balloon: Balloon, physics = getPhysicsOptions(balloon)): void {
     const sq = balloon.vx * balloon.vx + balloon.vy * balloon.vy
-    if (sq <= MAX_SPEED * MAX_SPEED) return
-    const scale = MAX_SPEED / Math.sqrt(sq)
+    if (sq <= physics.maxSpeed * physics.maxSpeed) return
+    const scale = physics.maxSpeed / Math.sqrt(sq)
     balloon.vx *= scale
     balloon.vy *= scale
 }
 
-function clampSpin(balloon: Balloon): void {
+function clampSpin(balloon: Balloon, physics = getPhysicsOptions(balloon)): void {
     balloon.angularVelocity = Math.max(
-        -MAX_ANGULAR_SPEED,
-        Math.min(MAX_ANGULAR_SPEED, balloon.angularVelocity)
+        -physics.maxAngularSpeed,
+        Math.min(physics.maxAngularSpeed, balloon.angularVelocity)
     )
 }
 
 export function popWithForce(balloons: Balloon[], popped: Balloon): void {
     if (popped.popped) return
+    const physics = getPhysicsOptions(popped)
     popBalloon(popped)
 
 
-    const range = popped.radius * POP_RADIUS_MULTIPLIER
+    const range = popped.radius * physics.popRadiusMultiplier
     const rangeSq = range * range
     for (const balloon of balloons) {
         if (balloon === popped || balloon.popped || balloon.pointerId !== null) continue
@@ -89,12 +66,12 @@ export function popWithForce(balloons: Balloon[], popped: Balloon): void {
 
         const distance = Math.sqrt(sq)
         const falloff = 1 - distance / range
-        const impulse = POP_IMPULSE * falloff * falloff
+        const impulse = physics.popImpulse * falloff * falloff
         const offset = (Math.random() - 0.5) * 0.3
         const direction = Math.atan2(dy, dx) + offset
         balloon.vx += Math.cos(direction) * impulse
         balloon.vy += Math.sin(direction) * impulse
-        balloon.angularVelocity += (Math.random() - 0.5) * impulse * ROTATION_TRANSFER
+        balloon.angularVelocity += (Math.random() - 0.5) * impulse * getPhysicsOptions(balloon).rotationTransfer
         clampVelocity(balloon)
         clampSpin(balloon)
     }
@@ -115,14 +92,14 @@ export function updateBalloonPhysics(
     for (const balloon of balloons) {
         if (balloon.popped) continue
         integrate(balloon, dt, config)
-        resolveScreenCollision(balloon, width, height)
+        resolveScreenCollision(balloon, width, height, config)
     }
 
     resolveBalloonCollisions(balloons, config)
 
     // Pairwise positional corrections can move objects beyond the screen.
     for (const balloon of balloons) {
-        if (!balloon.popped) resolveScreenCollision(balloon, width, height)
+        if (!balloon.popped) resolveScreenCollision(balloon, width, height, config)
     }
 }
 
@@ -131,8 +108,9 @@ function integrate(
     dt: number,
     config: BalloonConfig
 ): void {
+    const physics = getPhysicsOptions(balloon, config)
     if (balloon.pointerId !== null) {
-        const follow = 1 - Math.exp(-config.anchorStrength * dt)
+        const follow = 1 - Math.exp(-physics.anchorStrength * dt)
 
         balloon.x += (balloon.anchorX - balloon.x) * follow
         balloon.y += (balloon.anchorY - balloon.y) * follow
@@ -140,7 +118,7 @@ function integrate(
         balloon.vx = 0
         balloon.vy = 0
 
-        balloon.angularVelocity *= Math.exp(-ANGULAR_DRAG * dt)
+        balloon.angularVelocity *= Math.exp(-physics.angularDrag * dt)
         balloon.angle += balloon.angularVelocity * dt
 
         return
@@ -156,32 +134,31 @@ function integrate(
 
     // Slowly changing atmospheric movement
     const breeze =
-        Math.sin(t * BREEZE_FREQUENCY) * BREEZE_STRENGTH +
+        Math.sin(t * physics.breezeFrequency) * BREEZE_STRENGTH +
         Math.sin(t * 0.19 + 1.7) * BREEZE_STRENGTH * 0.45
 
     // Independent local movement
     const localBreeze =
-        Math.sin(t * 0.72 + phase) * 13
+        Math.sin(t * 0.72 + phase) * physics.localBreezeAmplitude
 
     const ax =
-        breeze +
-        localBreeze +
-        tilt * TILT_FORCE
+        (breeze + localBreeze) * physics.breezeResponse +
+        tilt * physics.tiltForce
 
     // Consistent upward buoyancy
     const ay =
-        -BUOYANCY +
-        Math.sin(t * 0.43 + phase) * 7
+        -physics.buoyancy +
+        Math.sin(t * 0.43 + phase) * physics.verticalBreezeAmplitude
 
     balloon.vx += ax * dt
     balloon.vy += ay * dt
 
-    const drag = Math.exp(-LINEAR_DRAG * dt)
+    const drag = Math.exp(-physics.linearDrag * dt)
 
     balloon.vx *= drag
     balloon.vy *= drag
 
-    clampVelocity(balloon)
+    clampVelocity(balloon, physics)
 
     balloon.x += balloon.vx * dt
     balloon.y += balloon.vy * dt
@@ -189,14 +166,16 @@ function integrate(
     // Rocking: slow oscillation and a little influence
     // from the local breeze and phone orientation.
     const targetAngle =
-        Math.sin(t * ROCK_FREQUENCY + phase) * ROCK_AMPLITUDE +
+        Math.sin(t * physics.rockFrequency + phase) * physics.rockAmplitude +
         Math.sin(t * 0.37 + phase * 0.7) * 0.035 +
-        tilt * TILT_LEAN +
-        ax * 0.0006
+        tilt * physics.tiltLean +
+        ax * physics.accelerationLean
+
+    const maxLeanOfType = physics.maxLean
 
     const desiredAngle = Math.max(
-        -MAX_LEAN,
-        Math.min(MAX_LEAN, targetAngle)
+        -maxLeanOfType,
+        Math.min(maxLeanOfType, targetAngle)
     )
 
     // Damped angular spring.
@@ -204,19 +183,22 @@ function integrate(
     const error = desiredAngle - balloon.angle
 
     const angularAcceleration =
-        error * ROCK_STIFFNESS -
-        balloon.angularVelocity * ROCK_DAMPING
+        error * physics.rockStiffness -
+        balloon.angularVelocity * physics.rockDamping
 
     balloon.angularVelocity += angularAcceleration * dt
 
-    clampSpin(balloon)
+    clampSpin(balloon, physics)
 
     balloon.angle += balloon.angularVelocity * dt
 }
 
-function resolveScreenCollision(balloon: Balloon, width: number, height: number): void {
+function resolveScreenCollision(
+    balloon: Balloon, width: number, height: number, config: Partial<PhysicsOptions>
+): void {
+    const physics = getPhysicsOptions(balloon, config)
     // Conservative circular bound that includes the knot and rotation.
-    const r = balloon.radius * 1.17
+    const r = balloon.radius * physics.screenRadiusRatio
     const minX = Math.min(r, width * 0.5)
     const maxX = Math.max(minX, width - r)
     const minY = Math.min(r, height * 0.5)
@@ -224,10 +206,10 @@ function resolveScreenCollision(balloon: Balloon, width: number, height: number)
 
     if (balloon.x < minX) {
         balloon.x = minX
-        if (balloon.vx < 0) balloon.vx = -balloon.vx * WALL_RETENTION
+        if (balloon.vx < 0) balloon.vx = -balloon.vx * physics.wallRetention
     } else if (balloon.x > maxX) {
         balloon.x = maxX
-        if (balloon.vx > 0) balloon.vx = -balloon.vx * WALL_RETENTION
+        if (balloon.vx > 0) balloon.vx = -balloon.vx * physics.wallRetention
     }
     if (balloon.y < minY) {
         balloon.y = minY
@@ -241,7 +223,7 @@ function resolveScreenCollision(balloon: Balloon, width: number, height: number)
         balloon.y = maxY
 
         if (balloon.vy > 0) {
-            balloon.vy = -balloon.vy * WALL_RETENTION
+            balloon.vy = -balloon.vy * physics.wallRetention
         }
     }
 }
@@ -252,13 +234,16 @@ export function resolveBalloonCollisions(
 ): void {
     let maxRadius = 0
     for (const balloon of balloons) {
-        if (!balloon.popped && balloon.radius > maxRadius) maxRadius = balloon.radius
+        if (balloon.popped) continue
+        const physics = getPhysicsOptions(balloon, config)
+        maxRadius = Math.max(maxRadius,
+            balloon.radius * physics.collisionRadiusRatio + physics.collisionPadding / 2)
     }
     if (maxRadius === 0) return
 
     // With this cell size, colliding circle centers can differ by at most
     // one cell in either direction. Each pair is tested exactly once.
-    const cellSize = Math.max(24, maxRadius * 1.6 + config.collisionPadding)
+    const cellSize = Math.max(24, maxRadius * 2)
     const columns = Math.max(1, Math.ceil(100000 / cellSize))
     for (const cell of activeCells) {
         cell.length = 0
@@ -298,10 +283,13 @@ export function resolveBalloonCollisions(
 }
 
 function resolveCollision(a: Balloon, b: Balloon, config: BalloonConfig): void {
+    const aPhysics = getPhysicsOptions(a, config)
+    const bPhysics = getPhysicsOptions(b, config)
     let dx = b.x - a.x
     let dy = b.y - a.y
     let distSq = dx * dx + dy * dy
-    const minDistance = (a.radius + b.radius) * 0.8 + config.collisionPadding
+    const minDistance = a.radius * aPhysics.collisionRadiusRatio + b.radius * bPhysics.collisionRadiusRatio +
+        (aPhysics.collisionPadding + bPhysics.collisionPadding) / 2
     if (distSq >= minDistance * minDistance) return
 
     if (distSq < 0.000001) {
@@ -320,13 +308,13 @@ function resolveCollision(a: Balloon, b: Balloon, config: BalloonConfig): void {
     if (ac) {
         b.x += nx * penetration
         b.y += ny * penetration
-        pushFromControlledBalloon(b, nx, ny, penetration)
+        pushFromControlledBalloon(b, nx, ny, penetration, bPhysics)
         return
     }
     if (bc) {
         a.x -= nx * penetration
         a.y -= ny * penetration
-        pushFromControlledBalloon(a, -nx, -ny, penetration)
+        pushFromControlledBalloon(a, -nx, -ny, penetration, aPhysics)
         return
     }
 
@@ -341,33 +329,33 @@ function resolveCollision(a: Balloon, b: Balloon, config: BalloonConfig): void {
     const normalSpeed = rvx * nx + rvy * ny
     if (normalSpeed >= 0) return
 
-    const impulse = -(1 + config.collisionRestitution) * normalSpeed * 0.5
+    const impulse = -(1 + (aPhysics.collisionRestitution + bPhysics.collisionRestitution) / 2) * normalSpeed * 0.5
     a.vx -= nx * impulse
     a.vy -= ny * impulse
     b.vx += nx * impulse
     b.vy += ny * impulse
 
     const tangentialSpeed = -rvx * ny + rvy * nx
-    const spin = tangentialSpeed * ROTATION_TRANSFER
-    a.angularVelocity += spin
-    b.angularVelocity -= spin
-    clampVelocity(a)
-    clampVelocity(b)
-    clampSpin(a)
-    clampSpin(b)
+    a.angularVelocity += tangentialSpeed * aPhysics.rotationTransfer
+    b.angularVelocity -= tangentialSpeed * bPhysics.rotationTransfer
+    clampVelocity(a, aPhysics)
+    clampVelocity(b, bPhysics)
+    clampSpin(a, aPhysics)
+    clampSpin(b, bPhysics)
 }
 
 function pushFromControlledBalloon(
     target: Balloon,
     nx: number,
     ny: number,
-    penetration: number
+    penetration: number,
+    physics: Readonly<PhysicsOptions>
 ): void {
     // Restrict the impulse to keep crowded systems stable.
-    const impulse = Math.min(100, PUSH_BASE_IMPULSE + penetration * PUSH_PENETRATION_IMPULSE)
+    const impulse = Math.min(physics.maxPushImpulse, physics.pushBaseImpulse + penetration * physics.pushPenetrationImpulse)
     target.vx += nx * impulse
     target.vy += ny * impulse
-    target.angularVelocity += (-ny * target.vx + nx * target.vy) * ROTATION_TRANSFER
-    clampVelocity(target)
-    clampSpin(target)
+    target.angularVelocity += (-ny * target.vx + nx * target.vy) * physics.rotationTransfer
+    clampVelocity(target, physics)
+    clampSpin(target, physics)
 }
