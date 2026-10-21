@@ -5,7 +5,7 @@ import { playPopSound, unlockAudio } from './audio'
 import type { AppView } from './navigation'
 
 const SETTINGS_KEY = 'balloons.play.settings'
-export function setupPlaySession(onBreak: () => void): { objectCreated(): void; resolveView(view: AppView): AppView } {
+export function setupPlaySession(onBreak: () => void): { objectCreated(): void; resolveView(view: AppView): AppView; showScreensaver(): void } {
     let saved = defaultPlaySettings
     try { saved = parsePlaySettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null')) } catch { /* use defaults */ }
     const session = new PlaySession(saved, Date.now())
@@ -30,10 +30,20 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
             timer.setAttribute('aria-label', session.settings.enabled ? `Play time remaining: ${timer.textContent}` : 'Play timer disabled')
             timer.parentElement?.setAttribute('title', session.settings.enabled ? 'Starts with the first object; resets after an idle cooldown' : 'Play timer disabled')
         }
-        const drawing = location.hash === '#/sketchpad' || location.hash === '#/matching'
+        const drawing = location.hash === '#/sketchpad' || location.hash === '#/matching' || location.hash === '#/puzzle'
         returnBalloon.hidden = session.phase !== 'ready' || !drawing
+        const puzzleReturn = document.getElementById('puzzle-view')?.shadowRoot?.querySelector<HTMLButtonElement>('#puzzle-return')
+        if (puzzleReturn) {
+            puzzleReturn.disabled = session.phase === 'cooldown'
+            const wait = Math.max(0, Math.ceil((session.cooldownUntil - Date.now()) / 1000))
+            puzzleReturn.textContent = session.phase === 'cooldown' ? `Bubbles in ${Math.floor(wait / 60)}:${String(wait % 60).padStart(2, '0')}` : 'Return to bubbles'
+            puzzleReturn.onclick = () => {
+                if (session.phase === 'cooldown') return
+                session.returnToPlay(Date.now()); location.hash = '/balloons'; sync()
+            }
+        }
         for (const id of ['back-to-balloons', 'use-drawing']) {
-            for (const host of ['sketchpad-view', 'matching-view']) {
+            for (const host of ['sketchpad-view', 'matching-view', 'puzzle-view']) {
                 const control = document.getElementById(host)?.shadowRoot?.querySelector<HTMLElement>(`#${id}`)
                 if (control) control.hidden = session.phase !== 'play'
             }
@@ -66,7 +76,7 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
         <h2 id="play-settings-title">Play timer</h2>
         <label>Time limit <span>(minutes)</span><input name="timeLimit" type="number" min="0.1" max="240" step="0.1" required></label>
         <label>Cooldown <span>(minutes)</span><input name="cooldown" type="number" min="0.1" max="240" step="0.1" required></label>
-        <label>Cooldown activity<select name="cooldownApp"><option value="sketchpad">Drawing</option><option value="matching">Letters & numbers</option><option value="alternate">Alternate</option></select></label>
+        <label>Cooldown activity<select name="cooldownApp"><option value="sketchpad">Drawing</option><option value="matching">Letters & numbers</option><option value="puzzle">Puzzles</option><option value="alternate">Rotate drawing, letters & puzzles</option></select></label>
         <label>Status<select name="enabled"><option value="false">Disabled</option><option value="true">Enabled</option></select></label>
         <p>The timer starts with the first new object. After an idle cooldown, the next object starts a fresh session. The screensaver waits for 10 minutes without a new object, or the time limit if longer.</p>
         <div class="play-settings-actions"><button type="button" data-cancel>Cancel</button><button type="submit">Save</button></div>
@@ -140,6 +150,7 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
         sync()
     }, 250)
     return {
+        showScreensaver() { onBreak(); idleShown = true; saver.show() },
         objectCreated() { session.objectCreated(Date.now()); idleShown = false; saver.hide(); sync() },
         resolveView(view) {
             queueMicrotask(sync)

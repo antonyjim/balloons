@@ -7,7 +7,7 @@ test('Alternate is saved and switches activities once per cooldown, not on subse
     const selected = parsePlaySettings({ enabled: true, timeLimit: 0.1, cooldown: 1, cooldownApp: 'alternate' })
     assert.equal(selected.cooldownApp, 'alternate')
     const session = new PlaySession(selected, 0)
-    for (const [index, expected] of ['sketchpad', 'matching', 'sketchpad', 'matching'].entries()) {
+    for (const [index, expected] of ['sketchpad', 'matching', 'puzzle', 'sketchpad', 'matching', 'puzzle'].entries()) {
         const now = index * 100_000
         session.returnToPlay(now)
         session.objectCreated(now)
@@ -89,5 +89,20 @@ test('cooldown deadlines catch up after a backgrounded tab resumes', () => {
     session.objectCreated(0)
     session.tick(120_000)
     session.tick(600_000)
+    assert.equal(session.phase, 'ready')
+})
+
+
+test('puzzles can be selected as a fixed break activity and bubbles stay locked until ready', () => {
+    const selected = parsePlaySettings({ enabled: true, timeLimit: 0.1, cooldown: 1, cooldownApp: 'puzzle' })
+    assert.equal(selected.cooldownApp, 'puzzle')
+    const session = new PlaySession(selected, 0)
+    session.objectCreated(0)
+    session.tick(6000)
+    assert.equal(session.cooldownActivity, 'puzzle')
+    assert.equal(session.phase, 'cooldown')
+    session.tick(65999)
+    assert.equal(session.phase, 'cooldown')
+    session.tick(66000)
     assert.equal(session.phase, 'ready')
 })

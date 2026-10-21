@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const vm = require('node:vm')
 const sessionModule = require('../dist-ts/playSession')
 
-for (const activity of ['sketchpad', 'matching']) test(`cooldown settings, return balloon, and idle screensaver work with ${activity}`, () => {
+for (const activity of ['sketchpad', 'matching', 'puzzle']) test(`cooldown settings, return balloon, and idle screensaver work with ${activity}`, () => {
     let now = 0, interval, timeout, breaks = 0, pops = 0, saverVisible = false
     class Element {
         events = new Map()
@@ -89,8 +89,19 @@ for (const activity of ['sketchpad', 'matching']) test(`cooldown settings, retur
     assert.equal(balloon.hidden, true)
     assert.equal(app.resolveView('balloons'), activity, 'normal return navigation cannot skip cooldown')
     assert.equal(sketch.shadowRoot.querySelector('#back-to-balloons').hidden, true)
+    const puzzleReturn = sketch.shadowRoot.querySelector('#puzzle-return')
+    if (activity === 'puzzle') {
+        assert.equal(puzzleReturn.disabled, true)
+        assert.equal(puzzleReturn.textContent, 'Bubbles in 0:06')
+        puzzleReturn.onclick()
+        assert.equal(app.resolveView('balloons'), 'puzzle')
+    }
     now = 32_000; interval()
     assert.equal(balloon.hidden, false)
+    if (activity === 'puzzle') {
+        assert.equal(puzzleReturn.disabled, false)
+        assert.equal(puzzleReturn.textContent, 'Return to bubbles')
+    }
     balloon.emit('pointerdown', { pointerType: 'touch', isPrimary: false })
     assert.equal(pops, 1, 'a secondary touch pops on contact without waiting for click or pointer-up')
     balloon.emit('click')
@@ -103,4 +114,8 @@ for (const activity of ['sketchpad', 'matching']) test(`cooldown settings, retur
     assert.equal(saverVisible, true)
     app.objectCreated()
     assert.equal(saverVisible, false)
+    const beforeManual = breaks
+    app.showScreensaver()
+    assert.equal(saverVisible, true, 'screensaver can be opened on demand')
+    assert.equal(breaks, beforeManual + 1)
 })

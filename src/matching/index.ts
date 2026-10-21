@@ -8,7 +8,7 @@ export function mountMatching(host: HTMLElement): MatchingApp {
     root.innerHTML = `<style>${styles}</style>
         <main class="toy-room">
             <header><div class="brand"><span class="brand-icon" aria-hidden="true">ABC</span><div><h1>Little letter shop</h1><p>A place for every little shape.</p></div></div>
-                <nav aria-label="Switch activity"><a id="switch-activity" href="#/sketchpad" title="Open the sketchpad">✎ Draw</a><a id="back-to-balloons" href="#/balloons">Balloons ↗</a></nav>
+                <nav aria-label="Switch activity"><a href="#/puzzle">Puzzles</a><a id="switch-activity" href="#/sketchpad" title="Open the sketchpad">✎ Draw</a><a id="back-to-balloons" href="#/balloons">Balloons ↗</a></nav>
             </header>
             <section class="cabinet" aria-label="Letter and number shelves">
                 <div class="cabinet-top"><span aria-hidden="true">✦</span><span>Find my little home</span><span class="progress">0 / 36</span></div>

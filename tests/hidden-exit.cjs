@@ -23,3 +23,33 @@ test('escape exits browser fullscreen and expands simple mode without navigating
     try { exitAppFullscreen(); assert.equal(exited, 1); assert.equal(expanded, 1) }
     finally { global.document = previous }
 })
+
+test('browser-controlled fullscreen gives visible guidance and enables the administrator escape key', async () => {
+    const previous = global.document
+    let requested = 0
+    global.document = {
+        getElementById: () => null,
+        dispatchEvent(event) { assert.equal(event.type, 'kiosk-exit-requested'); requested++ }
+    }
+    try {
+        const message = await exitAppFullscreen()
+        assert.match(message, /F11 is enabled/)
+        assert.match(message, /managed kiosks/)
+        assert.equal(requested, 1)
+    } finally { global.document = previous }
+})
+
+test('fullscreen API rejection is reported instead of failing silently', async () => {
+    const previous = global.document
+    global.document = { fullscreenElement: {}, exitFullscreen: async () => { throw new Error('blocked') }, getElementById: () => null }
+    try { assert.match(await exitAppFullscreen(), /could not exit fullscreen/) }
+    finally { global.document = previous }
+})
+
+test('older Safari fullscreen state and exit methods are supported', async () => {
+    const previous = global.document
+    let exited = false
+    global.document = { webkitIsFullScreen: true, webkitCancelFullScreen() { exited = true }, getElementById: () => null }
+    try { assert.equal(await exitAppFullscreen(), 'Exited fullscreen.'); assert.equal(exited, true) }
+    finally { global.document = previous }
+})

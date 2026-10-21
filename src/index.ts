@@ -1,3 +1,4 @@
+import { setupKioskInteractions } from './kioskInteractions'
 import { HiddenExitSequence, exitAppFullscreen } from './hiddenExit'
 import { setupPlaySession } from './playSessionUI'
 import { randomDuckAppearance } from './objects/duck'
@@ -59,6 +60,7 @@ void preloadSounds().catch(error => console.warn("Sound preload failed:", error)
 
 const isMobile = window.matchMedia('(pointer: coarse)').matches
 
+setupKioskInteractions()
 setupAppUpdates()
 setupAudioGestures()
 
@@ -588,6 +590,7 @@ if (sketchLink) bindActivation(sketchLink)
 // background.src = '/bg.png'
 const playSession = setupPlaySession(cancelCanvasPointers)
 setupWorkspace({
+    showScreensaver: () => playSession.showScreensaver(),
     resolveView(view) { return playSession.resolveView(view) },
     setSimpleMode(enabled) { themeManager.setSimpleMode(enabled) },
     showBalloons(active) {

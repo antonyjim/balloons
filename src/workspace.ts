@@ -1,3 +1,5 @@
+import { setupActivityLog } from './activityLogUI'
+import { mountPuzzle } from './puzzle'
 import { mountMatching, type MatchingApp } from './matching'
 import { bindActivation } from './activation'
 import { setupNavigation, type AppView } from './navigation'
@@ -5,6 +7,7 @@ import { mountSketchpad, type Sketchpad } from './sketchpad'
 import { themes } from './theme/themes'
 
 interface WorkspaceOptions {
+    showScreensaver?(): void
     resolveView?(view: AppView): AppView
     setSimpleMode(enabled: boolean): void
     showBalloons(active: boolean): void
@@ -12,6 +15,7 @@ interface WorkspaceOptions {
 }
 
 export function setupWorkspace(options: WorkspaceOptions): void {
+    const activityLog = setupActivityLog()
     const balloons = document.getElementById('balloons-view')!
     const sketchHost = document.getElementById('sketchpad-view')!
     const matchingHost = document.getElementById('matching-view')!
@@ -22,6 +26,8 @@ export function setupWorkspace(options: WorkspaceOptions): void {
     const status = document.getElementById('background-status')!
     let sketch: Sketchpad | null = null
     let matching: MatchingApp | null = null
+    const puzzleHost = document.getElementById('puzzle-view')!
+    let puzzle: ReturnType<typeof mountPuzzle> | null = null
     let ownedUrl: string | null = null
     let request = 0
     const close = (): void => { panel.hidden = true; trigger.setAttribute('aria-expanded', 'false') }
@@ -111,9 +117,13 @@ export function setupWorkspace(options: WorkspaceOptions): void {
     })
     setupNavigation(requestedView => {
         const view = options.resolveView?.(requestedView) ?? requestedView
+        activityLog.view(view)
         const drawing = view === 'sketchpad'
         const playing = view === 'matching'
         const balloonView = view === 'balloons'
+        puzzleHost.hidden = view !== 'puzzle'
+        if (view === 'puzzle' && !puzzle) puzzle = mountPuzzle(puzzleHost, activityLog.puzzle, options.showScreensaver)
+        puzzle?.setActive(view === 'puzzle')
         close()
         if (!balloonView) options.showBalloons(false)
         balloons.hidden = !balloonView
@@ -131,6 +141,6 @@ export function setupWorkspace(options: WorkspaceOptions): void {
         sketch?.setActive(drawing)
         // Resize only after the balloon canvas is visible again.
         if (balloonView) options.showBalloons(true)
-        document.title = drawing ? 'Sketchpad | Balloons' : playing ? 'Little letter shop | Balloons' : 'Balloons'
+        document.title = view === 'puzzle' ? 'Picture puzzles | Balloons' : drawing ? 'Sketchpad | Balloons' : playing ? 'Little letter shop | Balloons' : 'Balloons'
     })
 }

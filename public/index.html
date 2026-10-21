@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="stylesheet" href="/play-session.css">
 
@@ -23,6 +23,7 @@
     <style>
         .simple-mode .counter-card,
         .simple-mode .sketch-button,
+        .simple-mode .puzzle-button,
         .simple-mode .matching-button,
         .simple-mode #object-picker,
         .simple-mode .background-picker { display: none !important; }
@@ -37,6 +38,7 @@
             height: 100%;
             overflow: hidden;
             overscroll-behavior: none;
+            touch-action: pan-y;
             -webkit-user-select: none;
             user-select: none;
             -webkit-touch-callout: none;
@@ -55,7 +57,7 @@
         }
 
         [hidden] { display: none !important; }
-        #sketchpad-view, #matching-view { position: fixed; inset: 0; z-index: 20; }
+        #sketchpad-view, #matching-view, #puzzle-view { position: fixed; inset: 0; z-index: 20; }
 
         #background {
             position: fixed;
@@ -312,6 +314,7 @@
                 </svg>
                 
             </a>
+            <a class="action-button puzzle-button" href="#/puzzle" aria-label="Open picture puzzles" title="Puzzles">&#129513;</a>
             <a class="action-button matching-button" href="#/matching" aria-label="Open letter and number matching" title="Letters & numbers"><strong>ABC</strong></a>
             <div class="object-picker" id="object-picker">
                 <button id="object-type" class="action-button" type="button" aria-label="Choose object type"
@@ -391,6 +394,7 @@
 
     </main>
     <section id="sketchpad-view" aria-label="Sketchpad" hidden></section>
+    <section id="puzzle-view" aria-label="Picture puzzles" hidden></section>
     <section id="matching-view" aria-label="Letter and number matching" hidden></section>
     <script src="/app.js"></script>
 </body>

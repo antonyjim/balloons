@@ -1,5 +1,6 @@
-export type AppView = 'balloons' | 'sketchpad' | 'matching'
+export type AppView = 'balloons' | 'sketchpad' | 'matching' | 'puzzle'
 export function viewFromHash(hash: string): AppView {
+    if (hash === '#/puzzle') return 'puzzle'
     if (hash === '#/matching') return 'matching'
     return hash === '#/sketchpad' ? 'sketchpad' : 'balloons'
 }
