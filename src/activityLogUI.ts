@@ -10,6 +10,7 @@ export function setupActivityLog(): { view(activity: Activity): void; puzzle(kin
     } catch { /* Start an empty local log. */ }
     const log = new ActivityLog(events)
     const host = document.createElement('aside'); host.id = 'activity-log'
+    host.hidden = true
     const root = host.attachShadow({ mode: 'open' })
     root.innerHTML = `<style>:host{position:fixed;right:12px;bottom:12px;z-index:45;font:15px system-ui;color:#344559}*{box-sizing:border-box}details{background:#fffdf6;border:1px solid #bbc9c2;border-radius:14px;box-shadow:0 4px 24px #17263422}summary{padding:12px 18px;cursor:pointer;min-height:44px}details[open]{width:min(380px,calc(100vw - 24px))}.panel{padding:0 16px 16px;max-height:75dvh;overflow:auto}label{display:block;margin:12px 0}input,button{font:inherit;border:1px solid #bbc9c2;border-radius:8px;padding:8px;max-width:100%}input{width:100%;margin-top:6px}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:6px 2px}ol{padding-left:20px}li{padding:8px 0;border-bottom:1px solid #e1e7e1}small{color:#657182}button{cursor:pointer}h2{font-size:18px}.status{color:#9c3b30}</style><details><summary>Activity log</summary><div class="panel"><p>Active time by activity</p><table><thead><tr><th>Activity</th><th>Time</th></tr></thead><tbody></tbody></table><p id="counts"></p><small>Five minutes without input ends an activity. That idle period is removed. Time may adjust when an activity ends.</small><p><button id="export" style="display: none">Export log</button></p><p class="status" role="status"></p><h2>History</h2><ol></ol></div></details>`
     document.body.append(host)
@@ -53,7 +54,11 @@ export function setupActivityLog(): { view(activity: Activity): void; puzzle(kin
         const a = document.createElement('a'); a.href = url; a.download = 'activity-log.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
     }
     return {
-        view(activity) { log.view(activity, Date.now()); persist(); render() },
+        view(activity) {
+            host.hidden = activity !== 'puzzle'
+            if (host.hidden) details.open = false
+            log.view(activity, Date.now()); persist(); render()
+        },
         puzzle(kind, detail, solved, id) { log.puzzle(kind, detail, solved, Date.now(), id); persist(); render() }
     }
 }

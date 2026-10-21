@@ -16,6 +16,26 @@ export class PlaySession {
     cooldownActivity: 'sketchpad' | 'matching' | 'puzzle' = 'sketchpad'
     private nextAlternate: 'sketchpad' | 'matching' | 'puzzle' = 'sketchpad'
     constructor(public settings: PlaySettings, now: number) { this.lastObjectAt = now }
+    snapshot(): object {
+        return { settings: this.settings, startedAt: this.startedAt, lastObjectAt: this.lastObjectAt,
+            phase: this.phase, cooldownUntil: this.cooldownUntil, cooldownActivity: this.cooldownActivity, nextAlternate: this.nextAlternate }
+    }
+    restore(value: unknown): void {
+        if (!value || typeof value !== 'object') return
+        const state = value as Record<string, unknown>
+        const timestamp = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0
+        const activity = (s: unknown): s is 'sketchpad' | 'matching' | 'puzzle' => s === 'sketchpad' || s === 'matching' || s === 'puzzle'
+        if (!(state.startedAt === null || timestamp(state.startedAt)) || !timestamp(state.lastObjectAt)
+            || !timestamp(state.cooldownUntil) || !['play', 'cooldown', 'ready'].includes(String(state.phase))
+            || !activity(state.cooldownActivity) || !activity(state.nextAlternate)) return
+        this.settings = parsePlaySettings(state.settings)
+        this.startedAt = state.startedAt
+        this.lastObjectAt = state.lastObjectAt
+        this.cooldownUntil = state.cooldownUntil
+        this.phase = state.phase as PlaySession['phase']
+        this.cooldownActivity = state.cooldownActivity
+        this.nextAlternate = state.nextAlternate
+    }
     get idleDurationMs(): number { return this.settings.cooldown * 60_000 }
     get screensaverDurationMs(): number { return Math.max(10, this.settings.timeLimit) * 60_000 }
     screensaverDue(now: number): boolean { return now - this.lastObjectAt >= this.screensaverDurationMs }

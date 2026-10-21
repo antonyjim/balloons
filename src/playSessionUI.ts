@@ -5,10 +5,20 @@ import { playPopSound, unlockAudio } from './audio'
 import type { AppView } from './navigation'
 
 const SETTINGS_KEY = 'balloons.play.settings'
+const SESSION_KEY = 'balloons.play.session.v1'
 export function setupPlaySession(onBreak: () => void): { objectCreated(): void; resolveView(view: AppView): AppView; showScreensaver(): void } {
     let saved = defaultPlaySettings
     try { saved = parsePlaySettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null')) } catch { /* use defaults */ }
     const session = new PlaySession(saved, Date.now())
+    const readSession = (): void => {
+        try { session.restore(JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null')) } catch { /* storage unavailable */ }
+    }
+    const saveSession = (): void => {
+        try { localStorage.setItem(SESSION_KEY, JSON.stringify(session.snapshot())) } catch { /* keep playing in memory */ }
+    }
+    readSession()
+    session.tick(Date.now())
+    saveSession()
     const saver = createMystify()
     let idleShown = false
     const returnBalloon = document.createElement('button')
@@ -38,8 +48,7 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
             const wait = Math.max(0, Math.ceil((session.cooldownUntil - Date.now()) / 1000))
             puzzleReturn.textContent = session.phase === 'cooldown' ? `Bubbles in ${Math.floor(wait / 60)}:${String(wait % 60).padStart(2, '0')}` : 'Return to bubbles'
             puzzleReturn.onclick = () => {
-                if (session.phase === 'cooldown') return
-                session.returnToPlay(Date.now()); location.hash = '/balloons'; sync()
+                readSession(); if (session.phase === 'cooldown') return; session.returnToPlay(Date.now()); saveSession(); location.hash = '/balloons'; sync()
             }
         }
         for (const id of ['back-to-balloons', 'use-drawing']) {
@@ -53,7 +62,10 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
         if (session.phase !== 'ready' || returnBalloon.hidden) return
         unlockAudio()
         playPopSound('latex')
+        readSession()
+        if (session.phase !== 'ready') return
         session.returnToPlay(Date.now())
+        saveSession()
         idleShown = false
         returnBalloon.hidden = true
         location.hash = '/balloons'
@@ -96,6 +108,7 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
         const settings = parsePlaySettings({ enabled: field('enabled').value === 'true', timeLimit: Number(field('timeLimit').value), cooldown: Number(field('cooldown').value), cooldownApp: field('cooldownApp').value })
         session.configure(settings, Date.now())
         try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)) } catch { /* storage unavailable */ }
+        saveSession()
         dialog.close()
         sync()
     })
@@ -133,12 +146,24 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
     window.addEventListener('pointerup', cancelHold)
     window.addEventListener('pointercancel', cancelHold)
 
+    window.addEventListener('storage', event => {
+        if (event.key !== SESSION_KEY && event.key !== null) return
+        readSession()
+        session.tick(Date.now())
+        if (session.phase !== 'play' && location.hash === '#/balloons') {
+            onBreak()
+            location.hash = `/${session.cooldownActivity}`
+        }
+        sync()
+    })
     window.setInterval(() => {
         if (document.hidden) return
+        readSession()
         const before = session.phase
         const now = Date.now()
         session.tick(now)
-        if (before === 'play' && session.phase !== 'play') {
+        if (before !== session.phase) saveSession()
+        if (session.phase !== 'play' && (before === 'play' || location.hash === '#/balloons')) {
             onBreak()
             location.hash = `/${session.cooldownActivity}`
         }
@@ -151,8 +176,10 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
     }, 250)
     return {
         showScreensaver() { onBreak(); idleShown = true; saver.show() },
-        objectCreated() { session.objectCreated(Date.now()); idleShown = false; saver.hide(); sync() },
+        objectCreated() { readSession(); session.tick(Date.now()); session.objectCreated(Date.now()); saveSession(); idleShown = false; saver.hide(); sync() },
         resolveView(view) {
+            readSession()
+            session.tick(Date.now())
             queueMicrotask(sync)
             if (session.phase !== 'play' && view === 'balloons') {
                 const activity = session.cooldownActivity

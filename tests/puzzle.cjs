@@ -47,6 +47,7 @@ test('puzzles support correct and incorrect drops, tap completion, cancellation,
         Image: class { naturalWidth = 1200; naturalHeight = 800; async decode() {} },
         setTimeout: fn => { hold = fn; return 1 }, clearTimeout: () => { hold = undefined },
         require(name) {
+            if (name === '../celebration') return { createCelebration() { return { play() {}, stop() {} } } }
             if (name === './transfer') return require('../dist-ts/puzzle/transfer')
             if (name === './progress') return require('../dist-ts/puzzle/progress')
             if (name === './camera') return { createPuzzleCamera: () => ({ start: async () => {}, stop() {} }) }

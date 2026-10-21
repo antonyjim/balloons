@@ -1,3 +1,4 @@
+import { createCelebration } from '../celebration'
 import { exportPuzzles, importPuzzles, MAX_PUZZLE_FILE_BYTES } from './transfer'
 import { restorable, type PuzzleProgress } from './progress'
 import { createPuzzleCamera } from './camera'
@@ -11,6 +12,7 @@ import { cropRect, adjustCrop, type CropRect, type CropHandle } from './crop'
 type Picture = SavedPicture & { image: string }
 export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve', detail: string, solved?: boolean, id?: string) => void = () => {}, showScreensaver: () => void = () => {}): { setActive(value: boolean): void } {
     const root = host.attachShadow({ mode: 'open' })
+    const celebration = createCelebration(root)
     const accent = `hsl(${Math.floor(Math.random() * 360)} 48% 34%)`
     root.innerHTML = `<style>
     :host{--accent:${accent};font:16px system-ui;color:#344559}*{box-sizing:border-box}[hidden]{display:none!important}
@@ -99,11 +101,12 @@ export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve
         target.append(svg(slot)); target.classList.add('filled'); target.setAttribute('aria-label', `Space ${slot + 1}, complete`)
         tray.querySelector<HTMLElement>(`[data-id="${slot}"]`)!.hidden = true
         if (selected === pieceId) selected = null
-        if (placed.size === size * size) audit('solve', puzzleLabel(), true, roundId)
+        if (placed.size === size * size) { audit('solve', puzzleLabel(), true, roundId); celebration.play() }
         savedAt = Date.now(); checkpoint(); save()
         message.textContent = placed.size === size * size ? 'You did it! Your picture is complete.' : `${placed.size} of ${size * size} pieces in place.`
     }
     const start = (reset = false): void => {
+        celebration.stop()
         if (randomSize) {
             const prefix = `${cameraMode ? 'camera' : pictures[current]?.id ?? ''}:`
             const previousGrid = reset ? undefined : [3, 4, 5].filter(grid => restorable(progress[`${prefix}${grid}`], grid, Date.now()))
@@ -469,6 +472,6 @@ export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve
         const resuming = value && !active
         active = value
         if (resuming && loaded && !cameraMode) { start(); save() }
-        if (!value) { checkpoint(); save(); if (cameraMode) { stopCamera(); drawGallery(); start() } cancel(); cancelHold(); closeCrop(); if (cropDialog.open) cropDialog.close(); if (menu.open) menu.close() }
+        if (!value) { celebration.stop(); checkpoint(); save(); if (cameraMode) { stopCamera(); drawGallery(); start() } cancel(); cancelHold(); closeCrop(); if (cropDialog.open) cropDialog.close(); if (menu.open) menu.close() }
     } }
 }

@@ -42,6 +42,7 @@ test('dispenser, touch drag matching, speech, cancellation, and view switching f
         exports: {}, window: browser, document: { createElement: () => new Element() }, requestAnimationFrame: fn => fn(),
         SpeechSynthesisUtterance: class { constructor(text) { this.text = text } },
         require(name) {
+            if (name === '../celebration') return { createCelebration() { return { play() {}, stop() {} } } }
             if (name === 'matching-styles') return { default: '' }
             if (name === './game') return gameModule
             if (name === '../activation') return { bindActivation(element, action) { if (action) element.addEventListener('click', action) } }

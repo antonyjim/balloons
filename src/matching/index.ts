@@ -1,3 +1,4 @@
+import { createCelebration } from '../celebration'
 import styles from 'matching-styles'
 import { bindActivation } from '../activation'
 import { MatchingGame } from './game'
@@ -5,6 +6,7 @@ import { MatchingGame } from './game'
 export interface MatchingApp { setActive(active: boolean): void }
 export function mountMatching(host: HTMLElement): MatchingApp {
     const root = host.attachShadow({ mode: 'open' })
+    const celebration = createCelebration(root)
     root.innerHTML = `<style>${styles}</style>
         <main class="toy-room">
             <header><div class="brand"><span class="brand-icon" aria-hidden="true">ABC</span><div><h1>Little letter shop</h1><p>A place for every little shape.</p></div></div>
@@ -87,10 +89,12 @@ export function mountMatching(host: HTMLElement): MatchingApp {
         progress.textContent = `${game.matched.size} / ${game.symbols.length}`
         instruction.textContent = game.matched.size === game.symbols.length ? 'A shelf full of smiles! Press for a new collection.' : `Lovely! ${symbol} found its home. Ready for another?`
         dispenser.querySelector('strong')!.textContent = game.matched.size === game.symbols.length ? 'New shelves' : 'Next shape'
+        if (game.matched.size === game.symbols.length) celebration.play()
         speak(symbol)
         return true
     }
     const drawShelves = (): void => {
+        celebration.stop()
         shelves.replaceChildren()
         game.symbols.forEach((symbol, index) => {
             const slot = document.createElement('button')
@@ -162,6 +166,7 @@ export function mountMatching(host: HTMLElement): MatchingApp {
         cancel()
         active = value
         if (!active) {
+            celebration.stop()
             queuedSpeech = null
             touchInteraction = false
             utteranceInFlight = null
