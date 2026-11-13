@@ -1,3 +1,5 @@
+import { containsPaintPoint } from './paintShape'
+import { drawPaintBalloon } from './paintBalloon'
 import { drawDuckFlight } from './duck'
 import { drawBurningEnvelope } from './hotAirFire'
 import { bubbleFrame, bubbleRadiusAt } from './bubble'
@@ -117,6 +119,8 @@ export function drawBalloon(
         else drawPop(ctx, balloon)
         return
     }
+
+    if (balloon.finish === 'paint') { drawPaintBalloon(ctx, balloon); return }
 
     // Reuse one high-resolution sprite while growing instead of creating every 4px size.
     const radius = SPRITE_RADIUS
@@ -273,6 +277,7 @@ export function containsPoint(
         return false
     }
 
+    if (balloon.finish === 'paint') return containsPaintPoint(balloon, x, y)
     if (balloon.finish === 'bubble') {
         const dx = x - balloon.x, dy = y - balloon.y
         return Math.hypot(dx, dy) <= bubbleRadiusAt(balloon, Math.atan2(dy, dx))

@@ -1,10 +1,11 @@
+import { paintPhysics } from './paintShape'
 import { burstDuck, updateDuckBurst, drawDuckBurst, DUCK_BURST_DURATION } from './duckBurst'
 import { drawDuck, updateDuck, constrainDuck } from './duck'
 import { drawApple, appleSpriteRevision, updateApple, constrainApple } from './apple'
 import { materialRevision } from './balloonMaterials'
 import { drawWatermelon, watermelonSpriteRevision, watermelonPhysics, updateWatermelon, constrainWatermelon, smashWatermelon, updateWatermelonChunks, drawWatermelonChunks } from './watermelon'
 import { igniteHotAir, updateHotAirFire } from './hotAirFire'
-import { drawPaintBalloon, paintPhysics, popPaintBalloon } from './paintBalloon'
+import { drawPaintBalloon, popPaintBalloon, updatePaintBalloon, constrainPaintBalloon } from './paintBalloon'
 import { defaultPhysicsOptions, type PhysicsOptions } from './physicsOptions'
 import type { Balloon, BalloonConfig } from './balloonTypes'
 import type { BalloonFinish } from '../theme/types'
@@ -58,7 +59,8 @@ const definitions = {
         spriteHeight: 2.4,
         popAtMax: true,
         hitRadiusRatio: 0.94,
-        physics: { ...paintPhysics, appleImpactBreakSpeed: 450 },
+        physics: { ...paintPhysics, appleImpactBreakSpeed: 1500 },
+        updatePhysics: updatePaintBalloon, constrain: constrainPaintBalloon,
         onPop: popPaintBalloon
     },
     latex: {

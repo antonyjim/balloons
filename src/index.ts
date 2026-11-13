@@ -1,3 +1,5 @@
+import { releaseRadius } from './releaseOnFull'
+import { loadGenerationSettings } from './generationSettings'
 import { setupKioskInteractions } from './kioskInteractions'
 import { HiddenExitSequence, exitAppFullscreen } from './hiddenExit'
 import { setupPlaySession } from './playSessionUI'
@@ -259,8 +261,17 @@ function update(dt: number): void {
     enforceSizeLimits(balloons, width, groundY, balloonConfig)
     updateReset()
 
-    for (const balloon of balloons) {
-        updateBalloon(balloon, dt, width, groundY, balloonConfig, balloons)
+    for (const balloon of [...balloons]) {
+        const pointerId = balloon.pointerId
+        const held = pointerId === null ? undefined : heldGenerators.get(pointerId)
+        const target = held ? Math.min(held.target, maximumRadius(width, groundY, balloonConfig) * .96, availableRadius(balloon, balloons, width, groundY, balloonConfig)) : Infinity
+        const growthDt = held ? Math.min(dt, Math.max(0, target - balloon.radius) / balloonConfig.growthRate) : dt
+        updateBalloon(balloon, growthDt, width, groundY, balloonConfig, balloons)
+        if (held && pointerId !== null && !balloon.popped && balloon.radius >= target - .01) {
+            releaseBalloon(pointerId)
+            // Creation checks the shared area budget; a full screen ends this hold.
+            createHeldBalloon(pointerId, held.x, held.y, true)
+        }
     }
 
     updateBalloonPhysics(balloons, dt, width, groundY, balloonConfig, waterSurface(groundY, balloons, scenery.water))
@@ -371,6 +382,7 @@ function canvasPosition(
 canvas.addEventListener('contextmenu', event => event.preventDefault())
 
 let runAudioInit = true
+const heldGenerators = new Map<number, { x: number; y: number; target: number }>()
 const basketDrags = new Map<number, { x: number, y: number }>()
 
 canvas.addEventListener('pointerdown', event => {
@@ -417,9 +429,15 @@ canvas.addEventListener('pointerdown', event => {
         return
     }
 
-    const finish = themeManager.finishForPointer()
+    createHeldBalloon(event.pointerId, x, y)
+})
+
+function createHeldBalloon(pointerId: number, x: number, y: number, repeating = false): void {
+    const finish = themeManager.finishForPointer(repeating)
+    const generation = loadGenerationSettings()
+    const foilChance = generation.weights.foil / (generation.weights.latex + generation.weights.foil || 1)
     const balloon: Balloon = {
-        pointerId: event.pointerId,
+        pointerId: pointerId,
         x,
         y,
         vx: 0,
@@ -430,8 +448,8 @@ canvas.addEventListener('pointerdown', event => {
         color: themeManager.randomBalloonColor(finish),
         panelColors: getRandomPanelColors(themeManager.current.theme, Math.max(1, Math.floor(Math.random() * 5))),
         finish,
-        foil: finish === 'latex' && Math.random() < 0.18,
-        angle: (finish === "hot-air" || finish === "duck") ? 0 : Math.random() * Math.PI * 2,
+        foil: finish === 'latex' && Math.random() < foilChance,
+        angle: (finish === "hot-air" || finish === "duck" || finish === "paint") ? 0 : Math.random() * Math.PI * 2,
         angularVelocity: 0,
         growing: finish !== "apple",
         popped: false,
@@ -445,21 +463,26 @@ canvas.addEventListener('pointerdown', event => {
     const minimum = Math.min(balloonConfig.minRadius ?? balloonConfig.initialRadius, maxSize)
     if (room < minimum || maxSize <= 0) return
     balloon.radius = Math.max(minimum, Math.min(balloon.radius, maxSize, room))
-    if ((balloon.finish === "apple" || balloon.finish === "duck")) sampleAppleDrag(balloon, x, y, event.timeStamp)
+    if ((balloon.finish === "apple" || balloon.finish === "duck" || balloon.finish === "paint")) sampleAppleDrag(balloon, x, y, performance.now())
+    if (generation.releaseOnFull && !['apple', 'duck', 'watermelon'].includes(finish)) {
+        heldGenerators.set(pointerId, { x, y, target: releaseRadius(minimum, maxSize, room) })
+    } else heldGenerators.delete(pointerId)
     balloons.push(balloon)
     playSession.objectCreated()
     syncGround()
-    activePointers.set(event.pointerId, balloon)
-    canvas.setPointerCapture(event.pointerId)
+    activePointers.set(pointerId, balloon)
+    canvas.setPointerCapture(pointerId)
     if (activePointers.size === 1 && balloon.finish !== "watermelon" && balloon.finish !== "apple" && balloon.finish !== "duck") startInflateSound(balloon.finish)
     updateCounter()
-})
+}
 
 canvas.addEventListener('pointermove', event => {
     const balloon = activePointers.get(event.pointerId)
     try {
         if (!balloon || balloon.popped) return
         const { x, y } = canvasPosition(event)
+        const held = heldGenerators.get(event.pointerId)
+        if (held) { held.x = x; held.y = y }
         const drag = basketDrags.get(event.pointerId)
         if (drag) {
             moveHotAirAssembly(balloon, x - drag.x, y - drag.y)
@@ -467,7 +490,7 @@ canvas.addEventListener('pointermove', event => {
             drag.y = y
             return
         }
-        if ((balloon.finish === "apple" || balloon.finish === "duck")) sampleAppleDrag(balloon, x, y, event.timeStamp)
+        if ((balloon.finish === "apple" || balloon.finish === "duck" || balloon.finish === "paint")) sampleAppleDrag(balloon, x, y, event.timeStamp)
         balloon.anchorX = x
         balloon.anchorY = y
     } catch {
@@ -480,6 +503,7 @@ canvas.addEventListener('pointermove', event => {
 })
 
 function releaseBalloon(pointerId: number, time = performance.now()): void {
+    heldGenerators.delete(pointerId)
     const basketDrag = basketDrags.delete(pointerId)
     const balloon = activePointers.get(pointerId)
     if (!balloon) return
@@ -487,8 +511,13 @@ function releaseBalloon(pointerId: number, time = performance.now()): void {
     balloon.pointerId = null
     balloon.growing = false
 
-    if ((balloon.finish === "apple" || balloon.finish === "duck")) releaseAppleThrow(balloon, time)
-    if (!balloon.popped && !basketDrag && balloon.finish !== "apple" && balloon.finish !== "duck") {
+    if ((balloon.finish === "apple" || balloon.finish === "duck" || balloon.finish === "paint")) releaseAppleThrow(balloon, time)
+    if (balloon.finish === 'paint') {
+        const length = balloon.radius * 1.05 * (balloon.paintMotion?.stretch ?? 1)
+        balloon.vx -= Math.cos(balloon.angle) * balloon.angularVelocity * length
+        balloon.vy -= Math.sin(balloon.angle) * balloon.angularVelocity * length
+    }
+    if (!balloon.popped && !basketDrag && balloon.finish !== "apple" && balloon.finish !== "duck" && balloon.finish !== "paint") {
         const angle = Math.random() * Math.PI * 2
         const { releaseImpulse } = getPhysicsOptions(balloon, balloonConfig)
         const impulse = Math.max(releaseImpulse / 2, releaseImpulse * (0.9 + Math.random() * 0.5))
@@ -533,6 +562,7 @@ function syncInflateSound(): void {
 }
 
 function cancelCanvasPointers(): void {
+    heldGenerators.clear()
     activePointers.clear()
     basketDrags.clear()
     for (const balloon of balloons) {
@@ -549,7 +579,7 @@ function cancelCanvasPointers(): void {
 
 canvas.addEventListener('pointerup', event => {
     const apple = activePointers.get(event.pointerId)
-    if (apple && (apple.finish === 'apple' || apple.finish === 'duck')) {
+    if (apple && (apple.finish === 'apple' || apple.finish === 'duck' || apple.finish === 'paint')) {
         const { x, y } = canvasPosition(event)
         sampleAppleDrag(apple, x, y, event.timeStamp)
     }
@@ -580,6 +610,10 @@ window.visualViewport?.addEventListener(
     resize
 )
 const resetButton = document.getElementById('reset')
+const syncResetVisibility = (): void => { if (resetButton) resetButton.style.display = loadGenerationSettings().showReset ? '' : 'none' }
+syncResetVisibility()
+window.addEventListener('generation-settings-changed', syncResetVisibility)
+window.addEventListener('storage', syncResetVisibility)
 if (resetButton) bindActivation(resetButton, () => {
     if (hiddenExit.press('reset', performance.now())) exitAppFullscreen()
     else resetBalloons()

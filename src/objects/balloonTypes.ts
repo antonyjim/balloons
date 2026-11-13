@@ -3,6 +3,7 @@ import { BalloonFinish } from "../theme/types"
 import type { InteractiveObject, PopState } from "./objectTypes"
 
 export interface Balloon extends InteractiveObject, PopState {
+    paintMotion?: import('./paintShape').PaintMotion
     foil?: boolean
     duckBurst?: { x: number; y: number; vx: number; vy: number; angle: number; spin: number; size: number; color: string }[]
     waterEscape?: boolean

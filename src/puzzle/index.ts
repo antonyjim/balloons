@@ -1,3 +1,4 @@
+import { generationTypes, generationLabels, loadGenerationSettings, saveGenerationSettings, parseGenerationSettings } from '../generationSettings'
 import { createCelebration } from '../celebration'
 import { exportPuzzles, importPuzzles, MAX_PUZZLE_FILE_BYTES } from './transfer'
 import { restorable, type PuzzleProgress } from './progress'
@@ -22,10 +23,11 @@ export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve
     </style><main><header><h1 id="puzzle-title" tabindex="0" title="Hold 2.5 seconds for puzzle menu; Alt+Enter with keyboard">Picture puzzles</h1><nav aria-label="Switch activity"><a href="#/sketchpad">Drawing</a><a href="#/matching">Letters</a><button id="puzzle-return" type="button">Return to bubbles</button></nav></header>
     <div class="puzzle-layout"><aside class="puzzle-pane" aria-label="Choose a puzzle"><h2>Puzzles</h2><div class="puzzle-list"></div></aside><div class="puzzle-content"><div class="controls"><button id="restart" disabled>Reset</button><button id="screensaver" type="button">Screensaver</button></div>
     <div class="message" role="status" aria-live="polite">Loading puzzles...</div><section class="workspace" hidden><div class="board-wrap"><img class="reference" alt="" hidden><div class="board" aria-label="Puzzle board"></div></div><div class="tray" aria-label="Puzzle pieces"></div></section></div></div></main>
-    <dialog id="menu" aria-labelledby="menu-title"><header><h2 id="menu-title">Puzzle menu</h2><button id="close-menu">Done</button></header>
+    <dialog id="menu" aria-labelledby="menu-title"><header><h2 id="menu-title">Settings</h2><button id="close-menu">Done</button></header>
+    <div class="actions"><button id="activity-settings">Activity timer settings</button><button id="puzzle-settings">Puzzle settings</button><button id="balloon-settings">Balloon settings</button><button id="screensaver-settings">Screensaver settings</button></div><section id="balloon-settings-panel" hidden><h3>Balloon generation</h3><p>Relative weights for Random objects and automatic rotation. Set a weight to 0 to exclude it. Choosing a specific object still overrides the mix.</p><div class="settings">${generationTypes.map(type => `<label>${generationLabels[type]} <input data-weight="${type}" type="number" min="0" max="100" step="1" style="width:75px"></label>`).join('')}</div><label><input id="show-reset" type="checkbox"> Show Reset buttons</label><label><input id="release-on-full" type="checkbox"> Release on full ? keep holding to fill the screen</label><p id="generation-status" role="status"></p><button id="save-generation">Save balloon settings</button></section><section id="puzzle-settings-panel" hidden><h3>Puzzle settings</h3>
     <div class="settings"><label>Pieces <select id="size"><option value="random">Random (3, 4 or 5)</option><option value="3">3 x 3</option><option value="4">4 x 4</option><option value="5">5 x 5</option></select></label><label><input id="preview" type="checkbox"> Show picture underneath</label></div>
     <label>Puzzle name <input id="puzzle-name" maxlength="200"></label><h3>Saved pictures</h3><div class="gallery" aria-label="Saved pictures"></div><div class="actions"><label class="upload">Add image<input id="photos" type="file" accept="image/*"></label><button id="edit">Edit crop</button><button id="remove">Delete selected image</button></div>
-    <div class="menu-status" role="status" aria-live="polite"></div><p><a id="puzzle-download" hidden>Download puzzle file</a></p><div class="actions"><button id="export-puzzle">Export selected puzzle</button><button id="save">Export all puzzles</button><label class="upload">Import puzzles<input id="load" type="file" accept=".dat,.txt,.json,application/octet-stream,text/plain,application/json"></label><button id="exit-fullscreen">Exit fullscreen</button></div><small>Images stay on this device in browser storage. Save a collection to keep a backup.</small></dialog>
+    <div class="menu-status" role="status" aria-live="polite"></div><p><a id="puzzle-download" hidden>Download puzzle file</a></p><div class="actions"><button id="export-puzzle">Export selected puzzle</button><button id="save">Export all puzzles</button><label class="upload">Import puzzles<input id="load" type="file" accept=".dat,.txt,.json,application/octet-stream,text/plain,application/json"></label><button id="exit-fullscreen">Exit fullscreen</button></div><small>Images stay on this device in browser storage. Save a collection to keep a backup.</small></section></dialog>
     <dialog id="crop-dialog" aria-labelledby="crop-title"><header><h2 id="crop-title">Crop image</h2></header><label>Picture name <input id="picture-name" maxlength="200" required></label><p>Drag the corner or edge handles to crop. Drag inside the square to move it.</p><div class="crop-stage"><canvas id="crop-canvas" class="crop-canvas" width="800" height="800" aria-label="Original image"></canvas><div id="crop-selection" class="crop-selection" tabindex="0" aria-label="Crop area. Use arrow keys to move."></div></div><div class="actions"><button id="crop-save">Save image</button><button id="crop-cancel">Cancel</button></div><p id="crop-status" role="status"></p></dialog>`
     const get = <T extends HTMLElement>(selector: string): T => root.querySelector<T>(selector)!
     const gallery = get('.gallery'), board = get('.board'), tray = get('.tray'), message = get('.message')
@@ -232,7 +234,7 @@ export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve
     const cancelHold = (): void => { clearTimeout(hold); hold = undefined; holdPointer = null }
     const openMenu = (): void => {
         cancelHold(); cancel()
-        if (active && loaded && !menu.open) menu.showModal()
+        if (active && loaded && !menu.open) { get('#puzzle-settings-panel').hidden = true; get('#balloon-settings-panel').hidden = true; menu.showModal() }
     }
     title.onpointerdown = event => {
         if (event.button !== 0 || holdPointer !== null) return
@@ -246,6 +248,29 @@ export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve
     title.onpointerup = cancelHold; title.onpointercancel = cancelHold; title.onlostpointercapture = cancelHold
     title.oncontextmenu = event => event.preventDefault()
     title.onkeydown = event => { if (event.altKey && event.key === 'Enter') { event.preventDefault(); openMenu() } }
+    const syncReset = (): void => { get('#restart').hidden = !loadGenerationSettings().showReset }
+    syncReset()
+    window.addEventListener('generation-settings-changed', syncReset)
+    window.addEventListener('storage', syncReset)
+    get('#balloon-settings').onclick = () => {
+        get('#puzzle-settings-panel').hidden = true
+        get('#balloon-settings-panel').hidden = false
+        const settings = loadGenerationSettings()
+        for (const type of generationTypes) get<HTMLInputElement>(`[data-weight="${type}"]`).value = String(settings.weights[type])
+        get<HTMLInputElement>('#show-reset').checked = settings.showReset
+        get<HTMLInputElement>('#release-on-full').checked = settings.releaseOnFull
+    }
+    get('#save-generation').onclick = () => {
+        const inputs = generationTypes.map(type => get<HTMLInputElement>(`[data-weight="${type}"]`))
+        if (!inputs.every(input => input.reportValidity())) return
+        const weights = Object.fromEntries(generationTypes.map((type, i) => [type, Number(inputs[i].value)]))
+        if (!Object.values(weights).some(weight => weight > 0)) { get('#generation-status').textContent = 'Give at least one object a weight above zero.'; return }
+        saveGenerationSettings(parseGenerationSettings({ weights, showReset: get<HTMLInputElement>('#show-reset').checked, releaseOnFull: get<HTMLInputElement>('#release-on-full').checked }))
+        get('#generation-status').textContent = 'Saved.'
+    }
+    get('#puzzle-settings').onclick = () => { get('#balloon-settings-panel').hidden = true; get('#puzzle-settings-panel').hidden = false }
+    get('#activity-settings').onclick = () => { menu.close(); window.dispatchEvent(new Event('puzzle-activity-settings')) }
+    get('#screensaver-settings').onclick = () => { menu.close(); window.dispatchEvent(new Event('puzzle-screensaver-settings')) }
     get('#close-menu').onclick = () => menu.close()
 
     const cropDialog = get<HTMLDialogElement>('#crop-dialog'), canvas = get<HTMLCanvasElement>('#crop-canvas')

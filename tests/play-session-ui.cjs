@@ -4,8 +4,8 @@ const fs = require('node:fs')
 const vm = require('node:vm')
 const sessionModule = require('../dist-ts/playSession')
 
-for (const activity of ['sketchpad', 'matching', 'puzzle']) test(`cooldown settings, return balloon, and idle screensaver work with ${activity}`, () => {
-    let now = 0, interval, timeout, breaks = 0, pops = 0, saverVisible = false
+for (const activity of ['sketchpad', 'matching', 'puzzle', 'off']) test(`cooldown settings, return balloon, and idle screensaver work with ${activity}`, () => {
+    let now = 0, interval, timeout, breaks = 0, pops = 0, saverVisible = false, canDismiss
     class Element {
         events = new Map()
         hidden = false
@@ -37,6 +37,7 @@ for (const activity of ['sketchpad', 'matching', 'puzzle']) test(`cooldown setti
     }
     const target = new Element(), sketch = new Element(), timer = new Element(), elements = [], storage = new Map()
     sketch.shadowRoot = new Element()
+    const windowEvents = new Map()
     const location = { hash: '#/balloons' }
     const context = {
         exports: {}, Date: class extends Date { static now() { return now } }, performance: { now: () => now },
@@ -44,12 +45,12 @@ for (const activity of ['sketchpad', 'matching', 'puzzle']) test(`cooldown setti
         localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) },
         document: { hidden: false, body: { append(element) { elements.push(element) } },
             createElement: () => new Element(), querySelector: () => target, getElementById: id => id === 'play-timer' ? timer : sketch },
-        window: { setTimeout(fn) { timeout = fn; return 1 }, setInterval(fn) { interval = fn }, addEventListener() {} },
+        window: { setTimeout(fn) { timeout = fn; return 1 }, setInterval(fn) { interval = fn }, addEventListener(name, fn) { windowEvents.set(name, fn) } },
         clearTimeout() { timeout = undefined },
         require(name) {
             if (name === './playSession') return sessionModule
             if (name === './activation') return { bindActivation(element, action) { element.addEventListener('click', action) } }
-            if (name === './mystify') return { createMystify: () => ({ show() { saverVisible = true }, hide() { saverVisible = false }, visible: () => saverVisible }) }
+            if (name === './mystify') return { createMystify: (dismiss) => { canDismiss = dismiss; return ({ show() { saverVisible = true }, hide() { saverVisible = false }, visible: () => saverVisible }) } }
             if (name === './audio') return { unlockAudio() {}, playPopSound() { pops++ } }
             throw new Error(name)
         }
@@ -58,15 +59,24 @@ for (const activity of ['sketchpad', 'matching', 'puzzle']) test(`cooldown setti
     const app = context.exports.setupPlaySession(() => { breaks++ })
     const balloon = elements.find(element => element.className === 'cooldown-balloon')
     const dialog = elements.find(element => element.className === 'play-settings')
-    let ordinaryClicks = 0
-    target.addEventListener('click', () => ordinaryClicks++)
-    target.emit('pointerdown'); target.emit('pointerup'); target.emit('click')
-    assert.equal(ordinaryClicks, 1, 'a short press remains an ordinary background selection')
-    target.emit('pointerdown'); now = 1000; timeout()
+    windowEvents.get('puzzle-activity-settings')()
     assert.equal(dialog.open, true)
+    for (const name of ['timeLimit', 'cooldown']) {
+        const input = dialog.querySelector(`[name="${name}"]`)
+        dialog.querySelector(`[data-preset="${name}-10"]`).emit('click')
+        assert.equal(input.value, '10')
+        dialog.querySelector(`[data-adjust="${name}-down"]`).emit('click')
+        assert.equal(input.value, '9')
+        dialog.querySelector(`[data-adjust="${name}-up"]`).emit('click')
+        assert.equal(input.value, '10')
+        input.value = '0.1'
+        dialog.querySelector(`[data-adjust="${name}-down"]`).emit('click')
+        assert.equal(input.value, '0.1', 'touch adjustment respects the minimum')
+        input.value = '240'
+        dialog.querySelector(`[data-adjust="${name}-up"]`).emit('click')
+        assert.equal(input.value, '240', 'touch adjustment respects the maximum')
+    }
     now = 4000
-    target.emit('pointerup'); target.emit('click')
-    assert.equal(ordinaryClicks, 1, 'a long hold must not apply the sky selection')
     dialog.querySelector('[name="cooldownApp"]').value = activity
     dialog.querySelector('[name="enabled"]').value = 'true'
     dialog.querySelector('[name="timeLimit"]').value = '0.1'
@@ -83,11 +93,18 @@ for (const activity of ['sketchpad', 'matching', 'puzzle']) test(`cooldown setti
     app.objectCreated()
     assert.equal(timer.textContent, '0:03', 'timer counts down without resetting for every object')
     now = 26_000; interval()
-    assert.equal(location.hash, '/' + activity)
-    location.hash = '#/' + activity // Browser location normalizes assigned hashes.
+    const route = activity === 'off' ? 'sketchpad' : activity
+    assert.equal(location.hash, '/' + route)
+    if (activity === 'off') {
+        assert.equal(saverVisible, true)
+        assert.equal(canDismiss(), false)
+        app.objectCreated()
+        assert.equal(saverVisible, true, 'object creation cannot dismiss an Off cooldown')
+    }
+    location.hash = '#/' + route // Browser location normalizes assigned hashes.
     interval()
     assert.equal(balloon.hidden, true)
-    assert.equal(app.resolveView('balloons'), activity, 'normal return navigation cannot skip cooldown')
+    assert.equal(app.resolveView('balloons'), route, 'normal return navigation cannot skip cooldown')
     assert.equal(sketch.shadowRoot.querySelector('#back-to-balloons').hidden, true)
     const puzzleReturn = sketch.shadowRoot.querySelector('#puzzle-return')
     if (activity === 'puzzle') {
@@ -97,6 +114,7 @@ for (const activity of ['sketchpad', 'matching', 'puzzle']) test(`cooldown setti
         assert.equal(app.resolveView('balloons'), 'puzzle')
     }
     now = 32_000; interval()
+    if (activity === 'off') { assert.equal(canDismiss(), true); saverVisible = false }
     assert.equal(balloon.hidden, false)
     if (activity === 'puzzle') {
         assert.equal(puzzleReturn.disabled, false)

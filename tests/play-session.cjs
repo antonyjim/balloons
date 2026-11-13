@@ -106,3 +106,21 @@ test('puzzles can be selected as a fixed break activity and bubbles stay locked 
     session.tick(66000)
     assert.equal(session.phase, 'ready')
 })
+
+
+test('Off cooldown and custom screensaver delay persist through restore', () => {
+    const settings = parsePlaySettings({ enabled: true, timeLimit: .1, cooldown: 2, cooldownApp: 'off', screensaverMinutes: 3 })
+    const session = new PlaySession(settings, 0)
+    session.objectCreated(0)
+    session.tick(6000)
+    assert.equal(session.phase, 'cooldown')
+    assert.equal(session.settings.cooldownApp, 'off')
+    assert.equal(session.screensaverDurationMs, 180000)
+    const restored = new PlaySession({}, 0)
+    restored.restore(session.snapshot())
+    assert.equal(restored.settings.cooldownApp, 'off')
+    restored.tick(125999)
+    assert.equal(restored.phase, 'cooldown')
+    restored.tick(126000)
+    assert.equal(restored.phase, 'ready')
+})

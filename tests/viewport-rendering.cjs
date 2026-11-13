@@ -39,27 +39,23 @@ test('CSS viewport changes refresh the transform even if rounded backing dimensi
     assert.equal(transforms[0][0], 500 / 1000.4)
 })
 
-test('paint reset clears every backing pixel when zoomed out and restores its drawing transform', () => {
-    const { PaintLayer } = require('../dist-ts/objects/paintBalloon')
-    const previousDocument = global.document, previousPath = global.Path2D
-    global.Path2D = class {}
+test('static paint cache uses the full backing canvas and reset drops it at any pixel density', () => {
+    const { PaintLayer }=require('../dist-ts/objects/paintBalloon')
+    const previousPath=global.Path2D,previousDocument=global.document
+    global.Path2D=class {}
     try {
-        for (const dpr of [0.5, 0.8, 2]) {
-            const stack = []
-            let sx = 1, sy = 1, cleared
-            const ctx = {
-                save() { stack.push([sx, sy]) }, restore() { [sx, sy] = stack.pop() },
-                setTransform(a, b, c, d) { sx = a; sy = d },
-                clearRect(x, y, width, height) { cleared = [width * sx, height * sy] },
-                translate() {}, rotate() {}, scale() {}, fill() {}
-            }
-            global.document = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) }
-            const layer = new PaintLayer()
-            layer.add({ x: 400, y: 300, radius: 30, color: '#f00' })
-            layer.draw({ drawImage() {} }, 1600, 1200, dpr)
-            layer.clear()
-            assert.deepEqual(cleared, [1600 * dpr, 1200 * dpr])
-            assert.deepEqual([sx, sy], [dpr, dpr])
+        for(const dpr of [.5,.8,2]) {
+            let cleared,depth=0,images=0
+            const paint={setTransform(){},clearRect(x,y,w,h){cleared=[w,h]},save(){depth++},restore(){depth--},translate(){},rotate(){},scale(){},fill(){}}
+            global.document={createElement:()=>({width:0,height:0,getContext:()=>paint})}
+            const layer=new PaintLayer(()=>0),ctx={drawImage(){images++}}
+            layer.add({x:400,y:300,radius:30,color:'#f00'})
+            layer.draw(ctx,1600,1200,dpr)
+            assert.deepEqual(cleared,[1600*dpr,1200*dpr])
+            assert.equal(depth,0)
+            assert.equal(images,1)
+            layer.clear();layer.draw(ctx,1600,1200,dpr)
+            assert.equal(images,1,'reset paint never draws again')
         }
-    } finally { global.document = previousDocument; global.Path2D = previousPath }
+    } finally {global.Path2D=previousPath;global.document=previousDocument}
 })

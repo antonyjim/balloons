@@ -1,3 +1,5 @@
+import { beginPaintContacts, paintPairContact, paintContactBounds } from './objects/paintContact'
+import { paintContactRadius, pressPaint } from './objects/paintShape'
 import { applyWater, waterSurface, advanceWater } from './water'
 import { getWatermelonToughness } from './objects/watermelon'
 import { updateBubbleMotion, disturbBubble, bubbleRadiusAt } from './objects/bubble'
@@ -138,6 +140,21 @@ export function updateBalloonPhysics(
     }
 
     resolveBalloonCollisions(balloons, config, options)
+    // Several small constraint passes let floor support propagate up a pile.
+    for(let pass=0;paintPairs.length && pass<5;pass++) {
+        for(const [a,b] of paintPairs) if(!a.popped&&!b.popped) solvePaintPair(a,b)
+        for(const object of balloons) if(object.finish==='paint'&&!object.popped&&object.pointerId===null) {
+            const bounds=paintContactBounds(object)
+            if(bounds.bottom>=height) {
+                object.y-=bounds.bottom-height
+                if(object.vy>0)object.vy=0
+                if(object.paintMotion)object.paintMotion.grounded=true
+                pressPaint(object,0,1,object.radius*.8)
+            }
+            if(bounds.left<0){object.x-=bounds.left;if(object.vx<0)object.vx=0}
+            else if(bounds.right>width){object.x-=bounds.right-width;if(object.vx>0)object.vx=0}
+        }
+    }
 
     // Pairwise positional corrections can move objects beyond the screen.
     for (const balloon of balloons) {
@@ -311,13 +328,15 @@ export function resolveBalloonCollisions(
     collisionBreaks.clear()
     appleBreaks.clear()
     impactVelocities.clear()
+    beginPaintContacts()
+    paintPairs.length=0
     let maxRadius = 0
     for (const balloon of balloons) {
         if (balloon.popped) continue
         const physics = options.get(balloon)!
         impactVelocities.set(balloon, { x: balloon.x, y: balloon.y, vx: balloon.vx, vy: balloon.vy })
         maxRadius = Math.max(maxRadius,
-            balloon.radius * physics.collisionRadiusRatio * (balloon.finish === 'bubble' ? 1.15 : 1) + physics.collisionPadding / 2)
+            balloon.radius * (balloon.finish === 'paint' ? 1.9 : physics.collisionRadiusRatio) * (balloon.finish === 'bubble' ? 1.15 : 1) + physics.collisionPadding / 2)
     }
     if (maxRadius === 0) return
 
@@ -435,17 +454,62 @@ function resolveBasketContact(owner: Balloon, other: Balloon, physics: Readonly<
     clampVelocity(other, otherPhysics)
 }
 
+const paintPairs: [Balloon,Balloon][]=[]
+function solvePaintPair(a:Balloon,b:Balloon): void {
+    const contact=paintPairContact(a,b)
+    if(!contact)return
+    const {nx,ny,depth}=contact
+    pressPaint(a,nx,ny,depth);pressPaint(b,-nx,-ny,depth)
+    const ia=a.pointerId===null?1/Math.max(1,a.radius*a.radius):0
+    const ib=b.pointerId===null?1/Math.max(1,b.radius*b.radius):0
+    const total=ia+ib
+    if(!total)return
+    const correction=Math.max(0,depth-.08)/total
+    a.x-=nx*correction*ia;a.y-=ny*correction*ia
+    b.x+=nx*correction*ib;b.y+=ny*correction*ib
+    const speed=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny
+    if(speed<0) {
+        const impulse=-speed/total
+        a.vx-=nx*impulse*ia;a.vy-=ny*impulse*ia
+        b.vx+=nx*impulse*ib;b.vy+=ny*impulse*ib
+    }
+}
+
 function resolveCollision(a: Balloon, b: Balloon, options: ReadonlyMap<Balloon, Readonly<PhysicsOptions>>): void {
     if (a.popped || b.popped) return
+    if(a.finish==='paint'&&b.finish==='paint') {
+        paintPairs.push([a,b])
+        const contact=paintPairContact(a,b)
+        if(contact) {
+            const av=impactVelocities.get(a)!,bv=impactVelocities.get(b)!
+            const closing=-((bv.vx-av.vx)*contact.nx+(bv.vy-av.vy)*contact.ny)
+            if(closing>=1500) {
+                if(a.pointerId===null)collisionBreaks.add(a)
+                if(b.pointerId===null)collisionBreaks.add(b)
+            }
+            solvePaintPair(a,b)
+        }
+        return
+    }
     const aPhysics = options.get(a)!
     const bPhysics = options.get(b)!
     let dx = b.x - a.x
     let dy = b.y - a.y
     let distSq = dx * dx + dy * dy
     const direction = Math.atan2(dy, dx)
-    const minDistance = (a.finish === 'bubble' ? bubbleRadiusAt(a, direction) : a.radius) * aPhysics.collisionRadiusRatio
-        + (b.finish === 'bubble' ? bubbleRadiusAt(b, direction + Math.PI) : b.radius) * bPhysics.collisionRadiusRatio +
+    const minDistance = (a.finish === 'paint' ? paintContactRadius(a, direction) : (a.finish === 'bubble' ? bubbleRadiusAt(a, direction) : a.radius) * aPhysics.collisionRadiusRatio)
+        + (b.finish === 'paint' ? paintContactRadius(b, direction + Math.PI) : (b.finish === 'bubble' ? bubbleRadiusAt(b, direction + Math.PI) : b.radius) * bPhysics.collisionRadiusRatio) +
         (aPhysics.collisionPadding + bPhysics.collisionPadding) / 2
+    if (a.finish === 'paint' || b.finish === 'paint') {
+        const av = impactVelocities.get(a)!, bv = impactVelocities.get(b)!
+        const x = bv.x - av.x, y = bv.y - av.y
+        const distance = Math.hypot(x, y)
+        if (distance < minDistance) {
+            const closing = distance > .00001 ? -((bv.vx - av.vx) * x + (bv.vy - av.vy) * y) / distance : Math.hypot(bv.vx - av.vx, bv.vy - av.vy)
+            if (a.finish === 'paint' && a.pointerId === null && closing >= (b.finish === 'apple' ? aPhysics.appleImpactBreakSpeed : 1500)) collisionBreaks.add(a)
+            if (b.finish === 'paint' && b.pointerId === null && closing >= (a.finish === 'apple' ? bPhysics.appleImpactBreakSpeed : 1500)) collisionBreaks.add(b)
+        }
+    }
     if (a.finish === 'apple' || b.finish === 'apple') {
         const av = impactVelocities.get(a)!, bv = impactVelocities.get(b)!
         const x = bv.x - av.x, y = bv.y - av.y
@@ -493,6 +557,10 @@ function resolveCollision(a: Balloon, b: Balloon, options: ReadonlyMap<Balloon, 
     if (a.finish === 'bubble' && closingSpeed >= aPhysics.bubbleImpactBreakSpeed) collisionBreaks.add(a)
     if (b.finish === 'bubble' && closingSpeed >= bPhysics.bubbleImpactBreakSpeed) collisionBreaks.add(b)
     const penetration = Math.max(0, minDistance - distance)
+    if(penetration>0) {
+        pressPaint(a,nx,ny,penetration)
+        pressPaint(b,-nx,-ny,penetration)
+    }
     const impact = Math.max(0, -((b.vx - a.vx) * nx + (b.vy - a.vy) * ny)) + penetration * 3
     disturbBubble(a, nx, ny, impact)
     disturbBubble(b, -nx, -ny, impact)
@@ -503,13 +571,13 @@ function resolveCollision(a: Balloon, b: Balloon, options: ReadonlyMap<Balloon, 
     if (ac) {
         b.x += nx * penetration
         b.y += ny * penetration
-        pushFromControlledBalloon(b, nx, ny, penetration, bPhysics)
+        pushFromControlledBalloon(b, nx, ny, penetration, bPhysics, a)
         return
     }
     if (bc) {
         a.x -= nx * penetration
         a.y -= ny * penetration
-        pushFromControlledBalloon(a, -nx, -ny, penetration, aPhysics)
+        pushFromControlledBalloon(a, -nx, -ny, penetration, aPhysics, b)
         return
     }
 
@@ -544,8 +612,18 @@ function pushFromControlledBalloon(
     nx: number,
     ny: number,
     penetration: number,
-    physics: Readonly<PhysicsOptions>
+    physics: Readonly<PhysicsOptions>,
+    source?: Balloon
 ): void {
+    if(target.finish==='paint' && source) {
+        // A stationary held balloon displaces liquid bags without repeatedly
+        // injecting the minimum push impulse used by buoyant objects.
+        const closing=((source.vx-target.vx)*nx+(source.vy-target.vy)*ny)
+        const impulse=Math.min(physics.maxPushImpulse,Math.max(0,closing))
+        target.vx+=nx*impulse;target.vy+=ny*impulse
+        clampVelocity(target,physics)
+        return
+    }
     // Restrict the impulse to keep crowded systems stable.
     const impulse = Math.min(physics.maxPushImpulse, physics.pushBaseImpulse + penetration * physics.pushPenetrationImpulse)
     target.vx += nx * impulse

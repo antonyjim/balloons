@@ -13,7 +13,7 @@ test('focus loss stops growth and releases captures even for an orphaned held ob
     const released = []
     let audioStops = 0
     const context = {
-        balloons, activePointers, basketDrags,
+        balloons, activePointers, basketDrags, heldGenerators: new Map([[1, {}]]),
         canvas: { hasPointerCapture: () => true, releasePointerCapture(id) {
             assert.equal(activePointers.size, 0, 'clear ownership before lost capture can fire')
             released.push(id)
@@ -23,6 +23,7 @@ test('focus loss stops growth and releases captures even for an orphaned held ob
     vm.runInNewContext(source.slice(start, end) + '\ncancelCanvasPointers()', context)
     assert.ok(balloons.every(object => !object.growing && object.pointerId === null))
     assert.deepEqual(released, [1, 2])
+    assert.equal(context.heldGenerators.size, 0)
     assert.equal(basketDrags.size, 0)
     assert.equal(audioStops, 1)
 })

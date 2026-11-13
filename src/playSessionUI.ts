@@ -19,7 +19,7 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
     readSession()
     session.tick(Date.now())
     saveSession()
-    const saver = createMystify()
+    const saver = createMystify(() => { session.tick(Date.now()); return !(session.phase === 'cooldown' && session.settings.cooldownApp === 'off') })
     let idleShown = false
     const returnBalloon = document.createElement('button')
     returnBalloon.type = 'button'
@@ -85,16 +85,29 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
     dialog.className = 'play-settings'
     dialog.setAttribute('aria-labelledby', 'play-settings-title')
     dialog.innerHTML = `<form method="dialog">
-        <h2 id="play-settings-title">Play timer</h2>
-        <label>Time limit <span>(minutes)</span><input name="timeLimit" type="number" min="0.1" max="240" step="0.1" required></label>
-        <label>Cooldown <span>(minutes)</span><input name="cooldown" type="number" min="0.1" max="240" step="0.1" required></label>
-        <label>Cooldown activity<select name="cooldownApp"><option value="sketchpad">Drawing</option><option value="matching">Letters & numbers</option><option value="puzzle">Puzzles</option><option value="alternate">Rotate drawing, letters & puzzles</option></select></label>
+        <h2 id="play-settings-title">Activity timer settings</h2>
+        <div class="timer-duration"><label for="timer-timeLimit">Time limit <span>(minutes)</span></label><div class="timer-stepper"><button type="button" data-adjust="timeLimit-down" aria-label="Decrease time limit by one minute">?</button><input id="timer-timeLimit" name="timeLimit" type="number" inputmode="decimal" min="0.1" max="240" step="0.1" required><button type="button" data-adjust="timeLimit-up" aria-label="Increase time limit by one minute">+</button></div><div class="timer-presets" role="group" aria-label="Time limit presets">${[1, 5, 10, 15].map(minutes => `<button type="button" data-preset="timeLimit-${minutes}" aria-label="Set time limit to ${minutes} minutes">${minutes} min</button>`).join('')}</div></div>
+        <div class="timer-duration"><label for="timer-cooldown">Cooldown <span>(minutes)</span></label><div class="timer-stepper"><button type="button" data-adjust="cooldown-down" aria-label="Decrease cooldown by one minute">?</button><input id="timer-cooldown" name="cooldown" type="number" inputmode="decimal" min="0.1" max="240" step="0.1" required><button type="button" data-adjust="cooldown-up" aria-label="Increase cooldown by one minute">+</button></div><div class="timer-presets" role="group" aria-label="Cooldown presets">${[1, 5, 10, 15].map(minutes => `<button type="button" data-preset="cooldown-${minutes}" aria-label="Set cooldown to ${minutes} minutes">${minutes} min</button>`).join('')}</div></div>
+        <label>Cooldown activity<select name="cooldownApp"><option value="off">Off (screensaver until timer ends)</option><option value="sketchpad">Drawing</option><option value="matching">Letters & numbers</option><option value="puzzle">Puzzles</option><option value="alternate">Rotate drawing, letters & puzzles</option></select></label>
         <label>Status<select name="enabled"><option value="false">Disabled</option><option value="true">Enabled</option></select></label>
         <p>The timer starts with the first new object. After an idle cooldown, the next object starts a fresh session. The screensaver waits for 10 minutes without a new object, or the time limit if longer.</p>
         <div class="play-settings-actions"><button type="button" data-cancel>Cancel</button><button type="submit">Save</button></div>
     </form>`
     document.body.append(dialog)
     const field = (name: string): HTMLInputElement | HTMLSelectElement => dialog.querySelector(`[name="${name}"]`)!
+    for (const name of ['timeLimit', 'cooldown']) {
+        for (const [direction, delta] of [['down', -1], ['up', 1]] as const) {
+            bindActivation(dialog.querySelector<HTMLElement>(`[data-adjust="${name}-${direction}"]`)!, () => {
+                const input = field(name)
+                const current = Number(input.value)
+                const next = (Number.isFinite(current) ? current : 1) + delta
+                input.value = String(Math.round(Math.max(.1, Math.min(240, next)) * 10) / 10)
+            })
+        }
+        for (const minutes of [1, 5, 10, 15]) {
+            bindActivation(dialog.querySelector<HTMLElement>(`[data-preset="${name}-${minutes}"]`)!, () => { field(name).value = String(minutes) })
+        }
+    }
     const openSettings = (): void => {
         field('timeLimit').value = String(session.settings.timeLimit)
         field('cooldown').value = String(session.settings.cooldown)
@@ -105,7 +118,7 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
     dialog.querySelector('[data-cancel]')!.addEventListener('click', () => dialog.close())
     dialog.querySelector('form')!.addEventListener('submit', event => {
         event.preventDefault()
-        const settings = parsePlaySettings({ enabled: field('enabled').value === 'true', timeLimit: Number(field('timeLimit').value), cooldown: Number(field('cooldown').value), cooldownApp: field('cooldownApp').value })
+        const settings = parsePlaySettings({ enabled: field('enabled').value === 'true', timeLimit: Number(field('timeLimit').value), cooldown: Number(field('cooldown').value), cooldownApp: field('cooldownApp').value, screensaverMinutes: session.settings.screensaverMinutes })
         session.configure(settings, Date.now())
         try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)) } catch { /* storage unavailable */ }
         saveSession()
@@ -113,38 +126,24 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
         sync()
     })
 
-    // Hidden from ordinary taps; hold Automatic sky for a second to configure.
-    const target = document.querySelector<HTMLElement>('#background-menu [data-background="auto"]')!
-    target.title = 'Automatic sky · hold for play timer settings'
-    let hold: number | undefined, pointer: number | null = null, x = 0, y = 0, suppressUntil = 0, heldOpen = false
-    const cancelHold = (): void => { clearTimeout(hold); hold = undefined; pointer = null }
-    target.addEventListener('pointerdown', event => {
-        if (event.button !== 0 || pointer !== null) return
-        heldOpen = false
-        pointer = event.pointerId; x = event.clientX; y = event.clientY
-        hold = window.setTimeout(() => { heldOpen = true; suppressUntil = performance.now() + 1500; openSettings() }, 900)
-    }, true)
-    target.addEventListener('pointermove', event => {
-        if (event.pointerId === pointer && Math.hypot(event.clientX - x, event.clientY - y) > 12) cancelHold()
-    }, true)
-    target.addEventListener('pointerup', event => {
-        const held = heldOpen
-        heldOpen = false
-        cancelHold()
-        if (held) { suppressUntil = performance.now() + 800; event.preventDefault(); event.stopImmediatePropagation() }
-    }, true)
-    for (const name of ['pointercancel', 'lostpointercapture']) target.addEventListener(name, cancelHold)
-    target.addEventListener('pointerleave', event => { if (event.pointerType === 'mouse') cancelHold() })
-    target.addEventListener('click', event => {
-        if (performance.now() < suppressUntil) { event.preventDefault(); event.stopImmediatePropagation() }
-    }, true)
-    target.addEventListener('contextmenu', event => { event.preventDefault() })
-    target.addEventListener('keydown', event => {
-        if (event.altKey && event.key === 'Enter') { event.preventDefault(); openSettings() }
+    window.addEventListener('puzzle-activity-settings', openSettings)
+    const screensaverDialog = document.createElement('dialog')
+    screensaverDialog.className = 'play-settings'
+    screensaverDialog.innerHTML = `<form method="dialog"><h2>Screensaver settings</h2><label>Idle time (minutes)<input name="idle" type="number" min="0.1" max="240" step="0.1" required></label><p>During an Off cooldown, touch and keys cannot dismiss the screensaver until the activity timer finishes.</p><div class="play-settings-actions"><button type="button">Cancel</button><button type="submit">Save</button></div></form>`
+    document.body.append(screensaverDialog)
+    const idleField = screensaverDialog.querySelector<HTMLInputElement>('[name="idle"]')!
+    window.addEventListener('puzzle-screensaver-settings', () => {
+        idleField.value = String(session.settings.screensaverMinutes ?? Math.max(10, session.settings.timeLimit))
+        screensaverDialog.showModal()
     })
-    window.addEventListener('blur', cancelHold)
-    window.addEventListener('pointerup', cancelHold)
-    window.addEventListener('pointercancel', cancelHold)
+    screensaverDialog.querySelector('button')!.addEventListener('click', () => screensaverDialog.close())
+    screensaverDialog.querySelector('form')!.addEventListener('submit', event => {
+        event.preventDefault()
+        session.settings = parsePlaySettings({ ...session.settings, screensaverMinutes: Number(idleField.value) })
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(session.settings)) } catch { /* storage unavailable */ }
+        saveSession()
+        screensaverDialog.close()
+    })
 
     window.addEventListener('storage', event => {
         if (event.key !== SESSION_KEY && event.key !== null) return
@@ -167,16 +166,17 @@ export function setupPlaySession(onBreak: () => void): { objectCreated(): void; 
             onBreak()
             location.hash = `/${session.cooldownActivity}`
         }
-        if (session.screensaverDue(now) && !idleShown && !dialog.open) {
+        if (session.screensaverDue(now) && !idleShown && !dialog.open && !screensaverDialog.open) {
             idleShown = true
             onBreak()
             saver.show()
         }
+        if (session.phase === 'cooldown' && session.settings.cooldownApp === 'off' && !saver.visible()) { idleShown = true; onBreak(); saver.show() }
         sync()
     }, 250)
     return {
         showScreensaver() { onBreak(); idleShown = true; saver.show() },
-        objectCreated() { readSession(); session.tick(Date.now()); session.objectCreated(Date.now()); saveSession(); idleShown = false; saver.hide(); sync() },
+        objectCreated() { readSession(); session.tick(Date.now()); if (session.phase === 'cooldown') return; session.objectCreated(Date.now()); saveSession(); idleShown = false; saver.hide(); sync() },
         resolveView(view) {
             readSession()
             session.tick(Date.now())

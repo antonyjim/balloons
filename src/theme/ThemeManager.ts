@@ -1,3 +1,4 @@
+import { loadGenerationSettings, weightedFinish } from '../generationSettings'
 import { getRandomThemeColor } from './colors'
 import { themes, themeForTime } from './themes'
 import type { BalloonFinish, FinishMode, ThemeId, ThemeMode, ThemeState } from './types'
@@ -47,12 +48,15 @@ export class ThemeManager {
         'watermelon'
     ]
     private readonly handleVisibility = () => this.refresh()
+    private readonly handleGenerationSettings = () => { this.nextFinishChange = 0; this.refresh() }
 
     constructor() {
         this.state = this.resolve()
         this.timer = setInterval(() => this.refresh(), 30_000)
         document.addEventListener('visibilitychange', this.handleVisibility)
         window.addEventListener('focus', this.handleVisibility)
+        window.addEventListener('generation-settings-changed', this.handleGenerationSettings)
+        window.addEventListener('storage', this.handleGenerationSettings)
     }
 
     private resolve(): ThemeState {
@@ -110,10 +114,10 @@ export class ThemeManager {
         this.refresh()
     }
 
-    finishForPointer(): BalloonFinish {
+    finishForPointer(balloonsOnly = false): BalloonFinish {
         if (this.finishMode !== 'random') return this.state.finish
-        const options = this.finishes.filter(finish => !this.simpleMode || finish !== 'watermelon')
-        return options[Math.floor(Math.random() * options.length)]
+        const options = this.finishes.filter(finish => (!this.simpleMode || finish !== 'watermelon') && (!balloonsOnly || !['apple', 'duck', 'watermelon'].includes(finish)))
+        return weightedFinish(options, loadGenerationSettings(), Math.random())
     }
 
     randomBalloonColor(finish = this.state.finish): string {
@@ -135,13 +139,12 @@ export class ThemeManager {
 
         if (now < this.nextFinishChange) return
 
-        const options = this.finishes.filter(
-            finish => finish !== this.randomFinish && (!this.simpleMode || finish !== 'watermelon')
-        )
-
-        this.randomFinish = options[
-            Math.floor(Math.random() * options.length)
-        ]
+        const settings = loadGenerationSettings()
+        const eligible = this.finishes.filter(finish => !this.simpleMode || finish !== 'watermelon')
+        const alternatives = eligible.filter(finish => finish !== this.randomFinish &&
+            settings.weights[finish] + (finish === 'latex' ? settings.weights.foil : 0) > 0)
+        const options = alternatives.length ? alternatives : eligible
+        this.randomFinish = weightedFinish(options, settings, Math.random())
 
         this.nextFinishChange = now + 60 * 1000
     }
@@ -150,6 +153,8 @@ export class ThemeManager {
         if (this.timer !== null) clearInterval(this.timer)
         document.removeEventListener('visibilitychange', this.handleVisibility)
         window.removeEventListener('focus', this.handleVisibility)
+        window.removeEventListener('generation-settings-changed', this.handleGenerationSettings)
+        window.removeEventListener('storage', this.handleGenerationSettings)
         this.listeners.clear()
     }
 }

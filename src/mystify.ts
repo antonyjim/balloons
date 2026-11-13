@@ -1,5 +1,5 @@
 /** Three slowly changing light patterns; animation runs only while the overlay is visible. */
-export function createMystify(): { show(): void; hide(): void; visible(): boolean } {
+export function createMystify(canDismiss: () => boolean = () => true): { show(): void; hide(): void; visible(): boolean } {
     const canvas = document.createElement('canvas')
     canvas.className = 'mystify-screen'
     canvas.hidden = true
@@ -17,8 +17,8 @@ export function createMystify(): { show(): void; hide(): void; visible(): boolea
         active = false; canvas.hidden = true; cancelAnimationFrame(frame)
         previousFocus?.focus({ preventScroll: true })
     }
-    canvas.addEventListener('pointerdown', event => { event.preventDefault(); event.stopImmediatePropagation(); hide() })
-    canvas.addEventListener('keydown', event => { event.preventDefault(); event.stopImmediatePropagation(); hide() })
+    canvas.addEventListener('pointerdown', event => { event.preventDefault(); event.stopImmediatePropagation(); if (canDismiss()) hide() })
+    canvas.addEventListener('keydown', event => { event.preventDefault(); event.stopImmediatePropagation(); if (canDismiss()) hide() })
     const draw = (time: number): void => {
         if (!active || document.hidden) return
         const dt = (last ? Math.min(.05, Math.max(0, (time - last) / 1000)) : .016) * (reducedMotion ? .25 : 1)

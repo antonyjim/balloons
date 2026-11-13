@@ -124,6 +124,19 @@ export function mountMatching(host: HTMLElement): MatchingApp {
         instruction.textContent = `Can you find the home for ${symbol}?`
         home()
     })
+    const updateDragColor = (x: number, y: number): void => {
+        if (game.pending === null) return
+        const slot = shelves.querySelector<HTMLElement>(`[data-symbol="${game.pending}"]`)!
+        const target = slot.getBoundingClientRect()
+        const area = shelves.getBoundingClientRect()
+        // Measure from the piece center to the valid drop area, so every valid
+        // drop is hot. Scale the cold range with the shelf layout on any screen.
+        const distance = Math.hypot(Math.max(target.left - x, 0, x - target.right), Math.max(target.top - y, 0, y - target.bottom))
+        const warmth = 1 - Math.min(1, distance / Math.max(1, Math.hypot(area.width, area.height) * .6))
+        const cold = [38, 113, 224], hot = [225, 48, 55]
+        const color = cold.map((channel, index) => Math.round(channel + (hot[index] - channel) * warmth))
+        piece.style.setProperty('--drag-color', `rgb(${color.join(', ')})`)
+    }
     piece.addEventListener('pointerdown', event => {
         if (!active || game.pending === null || pointer !== null || event.button !== 0) return
         event.preventDefault()
@@ -131,6 +144,7 @@ export function mountMatching(host: HTMLElement): MatchingApp {
         offsetX = event.clientX - (box.left + box.width / 2)
         offsetY = event.clientY - (box.top + box.height / 2)
         pointer = event.pointerId
+        updateDragColor(event.clientX - offsetX, event.clientY - offsetY)
         piece.classList.add('dragging')
         piece.setPointerCapture(pointer)
     })
@@ -138,6 +152,7 @@ export function mountMatching(host: HTMLElement): MatchingApp {
         if (event.pointerId !== pointer) return
         piece.style.left = `${event.clientX - offsetX}px`
         piece.style.top = `${event.clientY - offsetY}px`
+        updateDragColor(event.clientX - offsetX, event.clientY - offsetY)
     })
     const cancel = (): void => {
         const previous = pointer

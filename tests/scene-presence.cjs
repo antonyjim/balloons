@@ -24,3 +24,12 @@ test('ground can remain after water expires, exited birds do not renew water, an
     scene.reset()
     assert.deepEqual(scene.update([], 2501), { ground: false, water: false })
 })
+
+
+test('paint shows the same floor as apples, with the same grace period and no water', () => {
+    const scene=new ScenePresence()
+    assert.deepEqual(sceneGround(800,[{finish:'paint'}]),sceneGround(800,[{finish:'apple'}]))
+    assert.deepEqual(scene.update([{finish:'paint'}],100),{ground:true,water:false})
+    assert.deepEqual(scene.update([],1000),{ground:true,water:false})
+    assert.deepEqual(scene.update([],100+SCENERY_GRACE_MS),{ground:false,water:false})
+})
