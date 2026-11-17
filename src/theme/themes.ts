@@ -1,3 +1,4 @@
+import { pastelPalette } from './colors'
 import type { Theme, ThemeId } from './types'
 
 
@@ -8,6 +9,7 @@ export const themes = {
         background: '/backgrounds/dawn.webp',
         gradient: 'linear-gradient(#71a7d8, #f8b5a2)',
         palette: [
+            ...pastelPalette,
             '#f6bbd6', '#c6b2f1', '#a2d9d5', '#ffe0ac',
             '#f7a8c4', '#eab6ff', '#9fd4f2', '#ffd3a8',
             '#ffb7b2', '#d8c3ff', '#b9ead7', '#ffe7b8',
@@ -26,6 +28,7 @@ export const themes = {
         background: '/backgrounds/day.webp',
         gradient: 'linear-gradient(#238cf0, #c5edff)',
         palette: [
+            ...pastelPalette,
             '#f44366', '#ffb943', '#8b66ed', '#44cda5', '#f46ecb',
             '#ff5252', '#ff7043', '#ffca28', '#66bb6a', '#26c6da',
             '#29b6f6', '#42a5f5', '#5c6bc0', '#7e57c2', '#ab47bc',
@@ -43,6 +46,7 @@ export const themes = {
         background: '/backgrounds/sunset.webp',
         gradient: 'linear-gradient(#8563a6, #ff9a72)',
         palette: [
+            ...pastelPalette,
             '#f4ac65', '#f06f85', '#b87bdd', '#ffdd85',
             '#ff9e7a', '#ffb3c1', '#c79bff', '#ffd6a5',
             '#ffc09f', '#f497b6', '#cdb4db', '#ffe29a',
@@ -61,6 +65,7 @@ export const themes = {
         background: '/backgrounds/night.webp',
         gradient: 'linear-gradient(#11275d, #6153a4)',
         palette: [
+            ...pastelPalette,
             '#b077ef', '#3de5d1', '#fa7cce', '#648cff',
             '#9b5de5', '#00bbf9', '#00f5d4', '#f15bb5',
             '#7b2cbf', '#5a189a', '#4895ef', '#4cc9f0',

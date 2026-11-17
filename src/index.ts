@@ -1,5 +1,6 @@
+import { RenderResolution } from './renderResolution'
 import { releaseRadius } from './releaseOnFull'
-import { loadGenerationSettings } from './generationSettings'
+import { generationConfig, loadGenerationSettings } from './generationSettings'
 import { setupKioskInteractions } from './kioskInteractions'
 import { HiddenExitSequence, exitAppFullscreen } from './hiddenExit'
 import { setupPlaySession } from './playSessionUI'
@@ -7,7 +8,7 @@ import { randomDuckAppearance } from './objects/duck'
 import { drawWater, waterSurface, waterTime } from './water'
 import { setupWorkspace } from './workspace'
 import { resetPopsDue, RESET_DEADLINE_SECONDS } from './resetTiming'
-import { maximumRadius, availableRadius, enforceSizeLimits } from './objects/sizeLimits'
+import { maximumRadius, availableRadius, enforceSizeLimits, hasSpawnCapacity } from './objects/sizeLimits'
 import { setupAppUpdates } from './appUpdates'
 import { containsBasketPoint, moveHotAirAssembly } from './objects/hotAirBalloon'
 import { sceneGround, ScenePresence } from './sceneGround'
@@ -72,16 +73,18 @@ canvas.addEventListener('contextmenu', e => {
 
 const balloonConfig: BalloonConfig = {
     ...defaultBalloonConfig,
-    initialRadius: isMobile ? 22 : 40,
-    minRadius: isMobile ? 18 : 24,
+    initialRadius: isMobile ? 33 : 60,
+    minRadius: isMobile ? 27 : 36,
     maxRadius: isMobile ? 100 : 190,
     maxRadiusScreenRatio: isMobile ? 0.24 : 0.27,
     maxObjectAreaRatio: 0.12,
-    maxSceneAreaRatio: isMobile ? 1.25 : 1.5,
+    maxSceneAreaRatio: isMobile ? 0.95 : 1.1,
+    maxObjects: isMobile ? 48 : 72,
     growthRate: isMobile ? 45 : 80,
     maxScreenRatio: isMobile ? 0.65 : 1 / 2.75
 }
 
+const deviceBalloonConfig = { ...balloonConfig }
 const balloons: Balloon[] = []
 const activePointers = new Map<number, Balloon>()
 const themeManager = new ThemeManager()
@@ -135,6 +138,7 @@ const requestMotion = (event: Event): void => {
 }
 for (const name of ['touchend', 'pointerup', 'click']) document.addEventListener(name, requestMotion, { capture: true, passive: true })
 
+const renderResolution = new RenderResolution()
 let currentDpr = 0
 let currentPixelWidth = 0
 let currentPixelHeight = 0
@@ -144,7 +148,11 @@ function syncGround(): void {
     const state = sceneGround(height, balloons, scenery.ground)
     groundY = state.y
     const ground = document.getElementById('ground')
-    if (ground) { ground.hidden = !state.visible; ground.style.height = `${height - groundY}px` }
+    if (ground) {
+        if (ground.hidden !== !state.visible) ground.hidden = !state.visible
+        const groundHeight = `${height - groundY}px`
+        if (ground.style.height !== groundHeight) ground.style.height = groundHeight
+    }
 }
 
 function resize(): void {
@@ -155,7 +163,7 @@ function resize(): void {
     const nextHeight = rect.height
     if (nextWidth <= 0 || nextHeight <= 0) return
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const dpr = Math.min(window.devicePixelRatio || 1, renderResolution.cap)
 
     const pixelWidth = Math.round(nextWidth * dpr)
     const pixelHeight = Math.round(nextHeight * dpr)
@@ -238,7 +246,7 @@ function updateReset(): void {
         if ((balloon.finish === 'apple' || balloon.finish === 'duck')) {
             balloon.apple = { exited: true }
         } else if (!balloon.popped) {
-            popWithForce(balloons, balloon)
+            popWithForce(balloons, balloon, balloonConfig)
         }
     }
 
@@ -327,11 +335,13 @@ let profileStart = performance.now()
 function frame(time: number): void {
     if (!balloonViewActive || document.hidden) {
         lastTime = 0
+        renderResolution.reset()
         requestAnimationFrame(frame)
         return
     }
     if (lastTime === 0) lastTime = time
 
+    if (renderResolution.sample(time - lastTime)) resize()
     const dt = Math.min((time - lastTime) / 1000, 1 / 30)
     lastTime = time
 
@@ -425,7 +435,7 @@ canvas.addEventListener('pointerdown', event => {
             canvas.setPointerCapture(event.pointerId)
             return
         }
-        popWithForce(balloons, balloon)
+        popWithForce(balloons, balloon, balloonConfig)
         return
     }
 
@@ -433,6 +443,7 @@ canvas.addEventListener('pointerdown', event => {
 })
 
 function createHeldBalloon(pointerId: number, x: number, y: number, repeating = false): void {
+    if (!hasSpawnCapacity(balloons, balloonConfig)) return
     const finish = themeManager.finishForPointer(repeating)
     const generation = loadGenerationSettings()
     const foilChance = generation.weights.foil / (generation.weights.latex + generation.weights.foil || 1)
@@ -609,8 +620,15 @@ window.visualViewport?.addEventListener(
     'resize',
     resize
 )
+window.addEventListener('generation-profile-applied', () => { themeManager.setSimpleMode(false); themeManager.setFinish('random') })
+window.addEventListener('hidden-game-reset', event => { if ((event as CustomEvent).detail === 'balloons') resetBalloons() })
 const resetButton = document.getElementById('reset')
-const syncResetVisibility = (): void => { if (resetButton) resetButton.style.display = loadGenerationSettings().showReset ? '' : 'none' }
+const syncResetVisibility = (): void => {
+    const settings = loadGenerationSettings()
+    if (resetButton) resetButton.style.display = settings.showReset ? '' : 'none'
+    Object.assign(balloonConfig, generationConfig(deviceBalloonConfig, settings))
+    if (!settings.releaseOnFull) heldGenerators.clear()
+}
 syncResetVisibility()
 window.addEventListener('generation-settings-changed', syncResetVisibility)
 window.addEventListener('storage', syncResetVisibility)

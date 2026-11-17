@@ -42,3 +42,6 @@ nav a { color: #41736b; text-decoration: none; padding: 10px 14px; background: #
     .toy-room { grid-template-rows: auto minmax(230px, 1fr) auto minmax(130px, 20%); }
 }
 @media (prefers-reduced-motion: reduce) { .slot.matched { animation: none; } }
+
+/* Keep the title below the shared controls at every responsive breakpoint. */
+.toy-room { padding-top: max(18px, calc(var(--shared-menu-bottom, 0px) + 16px)); }

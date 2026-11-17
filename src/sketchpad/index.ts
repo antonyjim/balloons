@@ -7,7 +7,7 @@ export interface Sketchpad {
   snapshot(): Promise<Blob>
 }
 
-export function mountSketchpad(host: HTMLElement, useDrawing: (image: Blob) => Promise<void>): Sketchpad {
+export function mountSketchpad(host: HTMLElement, useDrawing: (image: Blob, target?: 'balloons' | 'puzzle') => Promise<void>): Sketchpad {
 const root = host.attachShadow({ mode: 'open' })
 const body = markup.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? ''
 root.innerHTML = `<style>${styles.replace(':root', ':host')}</style>${body.replace(/<script[\s\S]*?<\/script>/gi, '')}`
@@ -329,7 +329,7 @@ toolButtons.forEach(button => {
   })
 })
 
-bindActivation(root.querySelector<HTMLButtonElement>('#clear')!, () => {
+const clearDrawing = (): void => {
   retained = null
   retainedWidth = retainedHeight = 0
   ctx.save()
@@ -338,7 +338,9 @@ bindActivation(root.querySelector<HTMLButtonElement>('#clear')!, () => {
   ctx.fillStyle = paper
   ctx.fillRect(0, 0, width, height)
   ctx.restore()
-})
+}
+bindActivation(root.querySelector<HTMLButtonElement>('#clear')!, clearDrawing)
+window.addEventListener('hidden-game-reset', event => { if (active && (event as CustomEvent).detail === 'sketchpad') { releasePointers(); clearDrawing() } })
 
 const releasePointers = (): void => {
   for (const id of [...colorPointers]) {
@@ -354,20 +356,17 @@ const snapshot = (): Promise<Blob> => {
   releasePointers()
   return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Could not export drawing')), 'image/png'))
 }
-bindActivation(root.querySelector<HTMLElement>('#back-to-balloons')!)
-const puzzleLink = root.querySelector<HTMLElement>('#open-puzzle')
-if (puzzleLink) bindActivation(puzzleLink)
-const matchingLink = root.querySelector<HTMLElement>('#open-matching')
-if (matchingLink) bindActivation(matchingLink)
-const useButton = root.querySelector<HTMLButtonElement>('#use-drawing')!
 const status = root.querySelector<HTMLElement>('#sketch-status')!
-bindActivation(useButton, () => {
-  useButton.disabled = true
-  status.textContent = 'Preparing drawing?'
-  void snapshot().then(useDrawing).then(() => { status.textContent = '' })
-    .catch(() => { status.textContent = 'Could not use drawing. Please try again.' })
-    .finally(() => { useButton.disabled = false })
-})
+for (const [id, target] of [['use-drawing', 'balloons'], ['use-drawing-puzzle', 'puzzle']] as const) {
+  const button = root.querySelector<HTMLButtonElement>(`#${id}`)
+  if (!button) continue
+  bindActivation(button, () => {
+    button.disabled = true; status.textContent = 'Preparing drawing?'
+    void snapshot().then(blob => useDrawing(blob, target)).then(() => { status.textContent = '' })
+      .catch(() => { status.textContent = 'Could not use drawing. Please try again.' })
+      .finally(() => { button.disabled = false })
+  })
+}
 window.addEventListener('blur', releasePointers)
 window.addEventListener('resize', resize)
 window.visualViewport?.addEventListener('resize', resize)

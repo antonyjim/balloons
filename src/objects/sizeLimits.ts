@@ -34,3 +34,8 @@ export function enforceSizeLimits(objects: Balloon[], width: number, height: num
     const scale = Math.sqrt(budget / total)
     for (const object of objects) if (!object.popped) object.radius *= scale
 }
+
+/** Include objects still animating out so rapid spawning cannot exceed the cap. */
+export function hasSpawnCapacity(objects: readonly unknown[], config: Pick<BalloonConfig, 'maxObjects'>): boolean {
+    return objects.length < (config.maxObjects ?? Infinity)
+}

@@ -33,3 +33,14 @@ test('simultaneous inflation shares the remaining area and resumes when space is
     updateBalloon(objects[1], 1, 390, 844, limited, objects)
     assert.ok(objects[1].radius > previous)
 })
+
+test('object cap applies to manual and continuous creation until existing objects leave', () => {
+    const { hasSpawnCapacity } = require('../dist-ts/objects/sizeLimits')
+    const objects = Array.from({ length: 16 }, () => ({ popped: false }))
+    assert.equal(hasSpawnCapacity(objects, { maxObjects: 16 }), false)
+    objects[0].popped = true
+    assert.equal(hasSpawnCapacity(objects, { maxObjects: 16 }), false, 'finishing animations still occupy capacity')
+    objects.shift()
+    assert.equal(hasSpawnCapacity(objects, { maxObjects: 16 }), true)
+    assert.equal(hasSpawnCapacity(objects, {}), true)
+})

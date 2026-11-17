@@ -31,8 +31,9 @@ const SOUND_URLS: Record<SoundKey, string> = {
     'hot-air:pop': hotAirPopUrl
 }
 
-const INFLATE_VOLUME = 0.35
-const POP_VOLUME = 0.6
+const INFLATE_VOLUME = 0.55
+const INFLATE_PLAYBACK_RATE = 0.88
+const POP_VOLUME = 0.35
 
 const buffers = new Map<SoundKey, AudioBuffer>()
 
@@ -180,6 +181,7 @@ function syncInflateSource(): void {
 
     source.buffer = buffer
     source.loop = true
+    source.playbackRate.value = INFLATE_PLAYBACK_RATE
 
     gain.gain.value = INFLATE_VOLUME
 

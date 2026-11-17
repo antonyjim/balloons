@@ -1,3 +1,4 @@
+import { layoutPixels } from '../pageScale'
 import { createCelebration } from '../celebration'
 import styles from 'matching-styles'
 import { bindActivation } from '../activation'
@@ -10,7 +11,6 @@ export function mountMatching(host: HTMLElement): MatchingApp {
     root.innerHTML = `<style>${styles}</style>
         <main class="toy-room">
             <header><div class="brand"><span class="brand-icon" aria-hidden="true">ABC</span><div><h1>Little letter shop</h1><p>A place for every little shape.</p></div></div>
-                <nav aria-label="Switch activity"><a href="#/puzzle">Puzzles</a><a id="switch-activity" href="#/sketchpad" title="Open the sketchpad">✎ Draw</a><a id="back-to-balloons" href="#/balloons">Balloons ↗</a></nav>
             </header>
             <section class="cabinet" aria-label="Letter and number shelves">
                 <div class="cabinet-top"><span aria-hidden="true">✦</span><span>Find my little home</span><span class="progress">0 / 36</span></div>
@@ -36,8 +36,8 @@ export function mountMatching(host: HTMLElement): MatchingApp {
     const home = (): void => {
         if (!active || piece.hidden) return
         const box = tray.getBoundingClientRect()
-        piece.style.left = `${box.left + box.width / 2}px`
-        piece.style.top = `${box.top + box.height / 2}px`
+        piece.style.left = `${layoutPixels(box.left + box.width / 2)}px`
+        piece.style.top = `${layoutPixels(box.top + box.height / 2)}px`
     }
     let utteranceInFlight: SpeechSynthesisUtterance | null = null
     let touchInteraction = false
@@ -150,8 +150,8 @@ export function mountMatching(host: HTMLElement): MatchingApp {
     })
     piece.addEventListener('pointermove', event => {
         if (event.pointerId !== pointer) return
-        piece.style.left = `${event.clientX - offsetX}px`
-        piece.style.top = `${event.clientY - offsetY}px`
+        piece.style.left = `${layoutPixels(event.clientX - offsetX)}px`
+        piece.style.top = `${layoutPixels(event.clientY - offsetY)}px`
         updateDragColor(event.clientX - offsetX, event.clientY - offsetY)
     })
     const cancel = (): void => {
@@ -175,7 +175,15 @@ export function mountMatching(host: HTMLElement): MatchingApp {
     window.addEventListener('blur', cancel)
     window.addEventListener('resize', () => { cancel(); home() })
     root.querySelector<HTMLElement>('.toy-room')?.addEventListener('scroll', () => { if (pointer === null) home() })
-    for (const link of root.querySelectorAll<HTMLElement>('nav a')) bindActivation(link)
+    window.addEventListener('hidden-game-reset', event => {
+        if (!active || (event as CustomEvent).detail !== 'matching') return
+        cancel(); game.newRound(); piece.hidden = true; dispenser.disabled = false
+        queuedSpeech = null
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel()
+        drawShelves()
+        dispenser.querySelector('strong')!.textContent = 'Next shape'
+        instruction.textContent = 'Press the sunshine button for a surprise!'
+    })
     drawShelves()
     return { setActive(value) {
         cancel()

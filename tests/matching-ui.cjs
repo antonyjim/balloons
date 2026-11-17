@@ -45,6 +45,7 @@ test('dispenser, touch drag matching, speech, cancellation, and view switching f
             if (name === '../celebration') return { createCelebration() { return { play() {}, stop() {} } } }
             if (name === 'matching-styles') return { default: '' }
             if (name === './game') return gameModule
+            if (name === '../pageScale' || name === './pageScale') return require('../dist-ts/pageScale')
             if (name === '../activation') return { bindActivation(element, action) { if (action) element.addEventListener('click', action) } }
             throw new Error(name)
         }

@@ -1,5 +1,5 @@
 import { loadGenerationSettings, weightedFinish } from '../generationSettings'
-import { getRandomThemeColor } from './colors'
+import { getRandomLatexColor, getRandomThemeColor } from './colors'
 import { themes, themeForTime } from './themes'
 import type { BalloonFinish, FinishMode, ThemeId, ThemeMode, ThemeState } from './types'
 
@@ -121,6 +121,7 @@ export class ThemeManager {
     }
 
     randomBalloonColor(finish = this.state.finish): string {
+        if (finish === 'latex') return getRandomLatexColor(this.state.theme)
 
         const variation = finish === 'hot-air'
             ? { hue: 18, saturation: 15, lightness: 12 }

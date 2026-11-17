@@ -1,10 +1,10 @@
-export interface PlaySettings { enabled: boolean; timeLimit: number; cooldown: number; cooldownApp?: 'matching' | 'sketchpad' | 'puzzle' | 'alternate' | 'off'; screensaverMinutes?: number }
+export interface PlaySettings { enabled: boolean; timeLimit: number; cooldown: number; cooldownApp?: 'matching' | 'sketchpad' | 'puzzle' | 'alternate' | 'off'; screensaverMinutes?: number; screensaverEnabled?: boolean }
 export const defaultPlaySettings: PlaySettings = { enabled: false, timeLimit: 5, cooldown: 2 }
 export function parsePlaySettings(value: unknown): PlaySettings {
     const input = value as Partial<PlaySettings> | null
     const minutes = (value: unknown, fallback: number): number =>
         typeof value === 'number' && Number.isFinite(value) && value >= 0.1 && value <= 240 ? value : fallback
-    return { enabled: input?.enabled === true, timeLimit: minutes(input?.timeLimit, 5), cooldown: minutes(input?.cooldown, 2), ...(input?.cooldownApp === 'off' || input?.cooldownApp === 'puzzle' || input?.cooldownApp === 'matching' || input?.cooldownApp === 'alternate' ? { cooldownApp: input.cooldownApp } : {}), ...(typeof input?.screensaverMinutes === 'number' ? { screensaverMinutes: minutes(input.screensaverMinutes, 10) } : {}) }
+    return { ...(input?.screensaverEnabled === false ? { screensaverEnabled: false } : {}), enabled: input?.enabled === true, timeLimit: minutes(input?.timeLimit, 5), cooldown: minutes(input?.cooldown, 2), ...(input?.cooldownApp === 'off' || input?.cooldownApp === 'puzzle' || input?.cooldownApp === 'matching' || input?.cooldownApp === 'alternate' ? { cooldownApp: input.cooldownApp } : {}), ...(typeof input?.screensaverMinutes === 'number' ? { screensaverMinutes: minutes(input.screensaverMinutes, 10) } : {}) }
 }
 
 /** Wall-clock deadlines keep background tabs from extending a play session. */
@@ -38,7 +38,13 @@ export class PlaySession {
     }
     get idleDurationMs(): number { return this.settings.cooldown * 60_000 }
     get screensaverDurationMs(): number { return (this.settings.screensaverMinutes ?? Math.max(10, this.settings.timeLimit)) * 60_000 }
-    screensaverDue(now: number): boolean { return now - this.lastObjectAt >= this.screensaverDurationMs }
+    /** Warn during the final ten seconds without extending the play deadline. */
+    countdownSeconds(now: number): number | null {
+        if (!this.settings.enabled || this.phase !== 'play' || this.startedAt === null || this.idle(now)) return null
+        const remaining = this.startedAt + this.settings.timeLimit * 60_000 - now
+        return remaining > 0 && remaining <= 10_000 ? Math.ceil(remaining / 1000) : null
+    }
+    screensaverDue(now: number): boolean { return this.settings.screensaverEnabled !== false && now - this.lastObjectAt >= this.screensaverDurationMs }
     objectCreated(now: number): void {
         if (this.phase !== 'play') return
         if (this.startedAt === null || now - this.lastObjectAt >= this.idleDurationMs) this.startedAt = now

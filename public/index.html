@@ -90,6 +90,13 @@
         }
 
 
+        #shared-toolbar { z-index: 50; }
+        #shared-toolbar [hidden] { display: none !important; }
+        #shared-toolbar.menu-collapsed .counter-card,
+        #shared-toolbar.menu-collapsed .reset-card > :not(#exit-simple-mode) { display: none !important; }
+        #shared-configuration { border-top: 1px solid #d9d4e6; margin-top: 10px; padding-top: 4px; }
+        #shared-configuration label { display: block; margin: 8px 0; font: 13px system-ui; }
+        #shared-configuration h3 { font: 600 14px system-ui; margin: 10px 0; }
         .overlay {
             position: fixed;
             top: 16px;
@@ -245,7 +252,7 @@
         }
 
         .background-picker { position: relative; }
-        #background-toggle { width: 44px; padding: 0; }
+        #background-toggle { width: auto; padding: 0 14px; }
         #background-menu {
             position: absolute; top: calc(100% + 10px); right: 0;
             width: min(260px, calc(100vw - 32px)); padding: 10px; border: 1px solid #e4ddfa;
@@ -272,7 +279,14 @@
         }
 
         @media (max-width: 480px) {
-            .overlay {
+            #shared-toolbar { z-index: 50; }
+        #shared-toolbar [hidden] { display: none !important; }
+        #shared-toolbar.menu-collapsed .counter-card,
+        #shared-toolbar.menu-collapsed .reset-card > :not(#exit-simple-mode) { display: none !important; }
+        #shared-configuration { border-top: 1px solid #d9d4e6; margin-top: 10px; padding-top: 4px; }
+        #shared-configuration label { display: block; margin: 8px 0; font: 13px system-ui; }
+        #shared-configuration h3 { font: 600 14px system-ui; margin: 10px 0; }
+        .overlay {
                 top: 10px;
                 left: 10px;
                 gap: 8px;
@@ -287,6 +301,46 @@
                 padding: 8px 12px;
             }
         }
+
+        body { --menu-accent: #6246ea; --menu-ink: #4930b0; --menu-surface: #faf8ff; --menu-soft: #eee8f8; --menu-border: #d8d3e3; }
+        body[data-app="matching"] { --menu-accent: #36756e; --menu-ink: #35444d; --menu-surface: #fff6df; --menu-soft: #d5ebe0; --menu-border: #b5cfc0; }
+        body[data-app="sketchpad"] { --menu-accent: #9b5884; --menu-ink: #625579; --menu-surface: #f4f3f9; --menu-soft: #f2e1ef; --menu-border: #d7cde4; }
+        body[data-app="puzzle"] { --menu-accent: #507751; --menu-ink: #344559; --menu-surface: #f8f3e9; --menu-soft: #e2e8df; --menu-border: #c7d1cb; }
+        #shared-toolbar .card { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--menu-surface); color: var(--menu-ink); }
+        #shared-toolbar .action-button { background: var(--menu-accent); color: white; }
+        #shared-toolbar #exit-simple-mode { width: 40px; padding: 0; margin-left: 8px; flex-shrink: 0; background: transparent; color: var(--menu-ink); opacity: .65; }
+        #shared-toolbar #exit-simple-mode:hover, #shared-toolbar #exit-simple-mode:focus-visible { background: var(--menu-soft); opacity: 1; }
+        #toolbar-collapse-label { display: none; }
+        #shared-toolbar #exit-simple-mode svg { transition: transform .15s; }
+        #shared-toolbar.menu-collapsed #exit-simple-mode svg { transform: rotate(180deg); }
+        #shared-toolbar #background-menu, #shared-toolbar #object-menu { background: var(--menu-surface); color: var(--menu-ink); border-color: var(--menu-border); }
+        #shared-toolbar #background-menu button, #shared-toolbar #object-menu button:hover,
+        #shared-toolbar #object-menu button[aria-checked="true"] { background: var(--menu-soft); color: var(--menu-ink); }
+        #shared-toolbar #play-timer, #shared-toolbar #counter { color: var(--menu-accent); }
+        #shared-toolbar #shared-configuration { border-color: var(--menu-border); }
+        #shared-toolbar button:focus-visible, #shared-toolbar a:focus-visible { outline-color: var(--menu-accent); }
+        .play-settings { background: var(--menu-surface); color: var(--menu-ink); border-color: var(--menu-border); }
+        .play-settings .play-settings-actions button, .play-settings .timer-presets button { background: var(--menu-soft); color: var(--menu-ink); }
+        #menu-unlock-progress { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 60px; height: 60px; z-index: 11000; pointer-events: none; color: var(--menu-ink); opacity: .65; }
+        #menu-unlock-progress svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 0 3px var(--menu-surface)); }
+        .unlock-quarters { stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 25 18; }
+        .unlock-quarters path { transition: opacity .15s; }
+        .unlock-quarters [data-complete="true"] { opacity: .08; }
+        .unlock-icon { stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+        @media (prefers-reduced-motion: reduce) { .unlock-quarters path { transition: none; } }
+        html { zoom: var(--page-scale, 1); }
+        html, body { width: var(--page-width, 100%); height: var(--page-height, 100%); }
+        #sketchpad-view, #matching-view, #puzzle-view, #app, canvas.mystify-screen { width: var(--page-width, 100vw); height: var(--page-height, 100dvh); }
+        #shared-toolbar { max-width: calc(var(--page-width, 100vw) - 32px); }
+        #shared-toolbar .reset-card { flex-wrap: wrap; justify-content: flex-start; min-width: 0; max-width: 100%; }
+        #shared-toolbar .reset-card > .action-button, #shared-toolbar .object-picker, #shared-toolbar .background-picker { flex-shrink: 0; }
+        #shared-toolbar .action-button { white-space: nowrap; }
+        #shared-toolbar #exit-simple-mode { margin-left: auto; }
+
+        #background-menu { max-width: calc(var(--page-width, 100vw) - 32px); }
+        #menu-unlock-progress { top: calc(var(--page-height, 100vh) / 2); left: calc(var(--page-width, 100vw) / 2); }
+        #page-scale { font: inherit; padding: 6px; border: 1px solid var(--menu-border); border-radius: 8px; color: var(--menu-ink); background: var(--menu-surface); }
+        .play-settings { max-width: calc(var(--page-width, 100vw) - 32px); max-height: calc(var(--page-height, 100dvh) - 32px); }
     </style>
 </head>
 
@@ -354,12 +408,14 @@
             </div>
             <div class="background-picker">
                 <button id="background-toggle" class="action-button" type="button" aria-label="Choose background"
-                    title="Choose background" aria-expanded="false" aria-controls="background-menu">
+                    title="Menu and settings" aria-expanded="false" aria-controls="background-menu">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
-                        <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="2"/><path d="m3 17 5-5 4 4 3-6 6 7"/>
+                        <path d="M4 6h16M4 12h16M4 18h16"/>
                     </svg>
+                    <span>Menu</span>
                 </button>
                 <div id="background-menu" role="dialog" aria-label="Scene background" hidden>
+                    <section id="balloon-background-options"><h3>Background</h3>
                     <button type="button" data-background="auto">Automatic sky</button>
                     <div class="sky-options">
                         <button type="button" data-background="dawn"><img src="/backgrounds/dawn.webp" alt="">Dawn</button>
@@ -371,15 +427,16 @@
                     <button id="upload-background" type="button" style="display: none">Choose image?</button>
                     <small>Use a photo or a generated background.</small>
                     <button id="simple-mode" type="button">Simple mode</button>
+                    </section>
                     <button id="app-update" type="button" hidden>Update available · Reload</button>
                     <span id="background-status" role="status"></span>
                 </div>
                 <input id="background-file" type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/gif" hidden>
             </div>
-            <button id="exit-simple-mode" class="action-button" type="button" aria-label="Exit simple mode and show controls" title="Show controls">
+            <button id="exit-simple-mode" class="action-button" type="button" aria-label="Collapse toolbar" aria-expanded="true" title="Collapse toolbar">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                    <path d="M4 6h16M4 12h16M4 18h16"/>
-                </svg>
+                    <path d="m15 6-6 6 6 6"/>
+                </svg><span id="toolbar-collapse-label">Collapse</span>
             </button>
             <button id="reset" class="action-button" type="button">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"

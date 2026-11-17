@@ -26,7 +26,7 @@ test('each frame clears the entire viewport at fractional and high pixel densiti
 test('CSS viewport changes refresh the transform even if rounded backing dimensions stay the same', () => {
     const transforms = []
     const context = {
-        balloonViewActive: true, width: 1000, height: 800,
+        renderResolution: { cap: 2 }, balloonViewActive: true, width: 1000, height: 800,
         currentPixelWidth: 500, currentPixelHeight: 400, currentDpr: 0.5,
         window: { devicePixelRatio: 0.5 }, syncGround() {},
         canvas: { width: 500, height: 400, getBoundingClientRect: () => ({ width: 1000.4, height: 800.4 }) },

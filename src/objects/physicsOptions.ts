@@ -2,6 +2,9 @@
  * Zero disables forces such as buoyancy, breeze response, and rocking.
  */
 export interface PhysicsOptions {
+    releaseImpulseMultiplier?: number
+    popImpulseMultiplier?: number
+    pushImpulseMultiplier?: number
     /** Closing speed required for an apple impact to pop this object (px/s). */
     appleImpactBreakSpeed: number
     /** Per-melon multipliers for the base breaking height. */

@@ -78,9 +78,9 @@ function clampSpin(balloon: Balloon, physics = getPhysicsOptions(balloon)): void
     )
 }
 
-export function popWithForce(balloons: Balloon[], popped: Balloon): void {
+export function popWithForce(balloons: Balloon[], popped: Balloon, config: Partial<PhysicsOptions> = {}): void {
     if (popped.popped || (popped.finish === 'apple' || popped.finish === 'duck')) return
-    const physics = getPhysicsOptions(popped)
+    const physics = getPhysicsOptions(popped, config)
     popBalloon(popped)
 
 
@@ -100,8 +100,8 @@ export function popWithForce(balloons: Balloon[], popped: Balloon): void {
         const direction = Math.atan2(dy, dx) + offset
         balloon.vx += Math.cos(direction) * impulse
         balloon.vy += Math.sin(direction) * impulse
-        balloon.angularVelocity += (Math.random() - 0.5) * impulse * getPhysicsOptions(balloon).rotationTransfer
-        clampVelocity(balloon, getPhysicsOptions(balloon))
+        balloon.angularVelocity += (Math.random() - 0.5) * impulse * getPhysicsOptions(balloon, config).rotationTransfer
+        clampVelocity(balloon, getPhysicsOptions(balloon, config))
         clampSpin(balloon)
     }
 }

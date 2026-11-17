@@ -25,7 +25,7 @@ test('one gesture unlocks the playback context; loading is shared and stopping c
         createBuffer() { return { silent: true } }
         createGain() { return { gain: {}, connect() {}, disconnect() {} } }
         createBufferSource() {
-            const source = { started: false, stopped: false, loop: false,
+            const source = { started: false, stopped: false, loop: false, playbackRate: { value: 1 },
                 connect() {}, disconnect() {},
                 start() { this.started = true }, stop() { this.stopped = true }
             }
@@ -60,6 +60,7 @@ test('one gesture unlocks the playback context; loading is shared and stopping c
         audio.startInflateSound('bubble')
         const loop = contexts[0].sources.find(source => source.loop)
         assert.ok(loop?.started, 'inflation uses the unlocked context')
+        assert.ok(loop.playbackRate.value < 1 && loop.playbackRate.value > .8, 'inflation has a gently lowered pitch')
         audio.startInflateSound('bubble')
         assert.equal(contexts[0].sources.filter(source => source.loop).length, 1)
         audio.playPopSound('paint')

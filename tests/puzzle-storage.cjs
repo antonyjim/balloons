@@ -101,3 +101,13 @@ test('saving new pictures works without crypto.randomUUID on HTTP kiosk pages', 
     assert.ok(first.length > 10)
     assert.notEqual(first, second)
 })
+
+test('drawing background persists separately from puzzle pictures', async () => {
+    const db = database()
+    const background = new Blob(['drawing'], { type: 'image/png' })
+    await db.api.saveCollection({ pictures: [], size: 3, preview: false, background })
+    const saved = await db.api.loadCollection()
+    assert.equal(saved.background.type, 'image/png')
+    assert.equal(await saved.background.text(), 'drawing')
+    assert.equal(saved.pictures.length, 0)
+})

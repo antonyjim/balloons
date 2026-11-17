@@ -53,3 +53,15 @@ test('older Safari fullscreen state and exit methods are supported', async () =>
     try { assert.equal(await exitAppFullscreen(), 'Exited fullscreen.'); assert.equal(exited, true) }
     finally { global.document = previous }
 })
+
+test('hidden reset requires one counterclockwise circuit and never fires for clockwise input', () => {
+    const { CornerResetSequence } = require('../dist-ts/hiddenExit')
+    const sequence = new CornerResetSequence()
+    for (let i = 0; i < 12; i++) assert.equal(sequence.press(i % 4, i * 100), false)
+    for (const [index, corner] of [0, 3, 2, 1].entries()) assert.equal(sequence.press(corner, 2000 + index * 12000), index === 3)
+    sequence.press(0, 50000); sequence.press(3, 50100)
+    assert.equal(sequence.press(2, 70000), false, 'timeout cancels an unfinished circuit')
+    assert.equal(sequence.press(1, 70100), false)
+    sequence.press(0, 71000); sequence.reset()
+    for (const corner of [3, 2, 1]) assert.equal(sequence.press(corner, 71100), false)
+})

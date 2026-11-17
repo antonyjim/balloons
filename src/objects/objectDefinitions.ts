@@ -101,10 +101,11 @@ export function getPhysicsOptions(
     object: Balloon,
     scene: Partial<PhysicsOptions> = {}
 ): Readonly<PhysicsOptions> {
-    return {
-        ...defaultPhysicsOptions,
-        ...scene,
-        ...getObjectDefinition(object.finish).physics,
-        ...object.physics
-    }
+    const options = { ...defaultPhysicsOptions, ...scene, ...getObjectDefinition(object.finish).physics, ...object.physics }
+    options.releaseImpulse *= options.releaseImpulseMultiplier ?? 1
+    options.popImpulse *= options.popImpulseMultiplier ?? 1
+    options.pushBaseImpulse *= options.pushImpulseMultiplier ?? 1
+    options.pushPenetrationImpulse *= options.pushImpulseMultiplier ?? 1
+    options.maxPushImpulse *= options.pushImpulseMultiplier ?? 1
+    return options
 }

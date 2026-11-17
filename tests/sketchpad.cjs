@@ -34,7 +34,7 @@ class Canvas extends Element {
 test('sketchpad preserves the drawing across view switches and resize and exports it for balloons', async () => {
     const canvas = new Canvas()
     const elements = Object.fromEntries(['color-wheel', 'color-preview', 'brush-size', 'size-toggle', 'size-panel',
-        'size-preview', 'clear', 'back-to-balloons', 'use-drawing', 'sketch-status'].map(id => [id, new Element()]))
+        'size-preview', 'clear', 'back-to-balloons', 'use-drawing', 'use-drawing-puzzle', 'sketch-status'].map(id => [id, new Element()]))
     elements.canvas = canvas
     const pen = new Element(); pen.dataset.tool = 'pen'
     const root = new Element()
@@ -50,6 +50,7 @@ test('sketchpad preserves the drawing across view switches and resize and export
         require(id) {
             if (id === 'sketchpad-markup') return fs.readFileSync('src/sketchpad/index.html', 'utf8')
             if (id === 'sketchpad-styles') return fs.readFileSync('src/sketchpad/style.css', 'utf8')
+            if (id === '../pageScale' || id === './pageScale') return require('../dist-ts/pageScale')
             if (id === '../activation') return { bindActivation(element, action) {
                 if (action) element.addEventListener('click', action)
             } }
@@ -57,8 +58,8 @@ test('sketchpad preserves the drawing across view switches and resize and export
         }
     }
     vm.runInNewContext(fs.readFileSync('dist-ts/sketchpad/index.js', 'utf8'), context)
-    const exported = []
-    const sketch = module.exports.mountSketchpad(host, async blob => exported.push(await blob.text()))
+    const exported = [], targets = []
+    const sketch = module.exports.mountSketchpad(host, async (blob, target) => { targets.push(target); exported.push(await blob.text()) })
     assert.ok(!root.innerHTML.includes('<script'))
     canvas.dispatchEvent(Object.assign(new Event('pointerdown', { cancelable: true }),
         { pointerType: 'touch', pointerId: 4, clientX: 200, clientY: 300 }))
@@ -84,4 +85,10 @@ test('sketchpad preserves the drawing across view switches and resize and export
     elements['use-drawing'].dispatchEvent(new Event('click'))
     await new Promise(resolve => setImmediate(resolve))
     assert.deepEqual(exported, ['drawn'])
+    elements['use-drawing-puzzle'].dispatchEvent(new Event('click'))
+    await new Promise(resolve => setImmediate(resolve))
+    assert.deepEqual(exported, ['drawn', 'drawn'])
+    assert.deepEqual(targets, ['balloons', 'puzzle'])
+    assert.ok(!root.innerHTML.includes('id="open-puzzle"'))
+    assert.ok(!root.innerHTML.includes('id="back-to-balloons"'))
 })

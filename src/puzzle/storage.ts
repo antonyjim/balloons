@@ -1,6 +1,6 @@
 import type { PuzzleProgress } from './progress'
 export interface SavedPicture { id: string; name: string; blob: Blob; original?: Blob }
-export interface PuzzleCollection { pictures: SavedPicture[]; size: number; preview: boolean; current?: string; progress?: Record<string, PuzzleProgress>; cameraPreview?: string; randomSize?: boolean }
+export interface PuzzleCollection { background?: Blob; pictures: SavedPicture[]; size: number; preview: boolean; current?: string; progress?: Record<string, PuzzleProgress>; cameraPreview?: string; randomSize?: boolean }
 const LEGACY_KEY = 'balloons.puzzles.v1'
 
 export function openPuzzleDatabase(): Promise<IDBDatabase> {

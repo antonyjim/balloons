@@ -1,4 +1,6 @@
 const { performance } = require('node:perf_hooks')
+// Benchmark simulation only: collisions must not initialize browser audio.
+require('../dist-ts/audio').playPopSound = () => {}
 const { updateBalloonPhysics } = require('../dist-ts/physics')
 const { defaultBalloonConfig } = require('../dist-ts/objects/balloon')
 function run(finish, count = 300, radius = 28, width = 1600, height = 1000, dt = 1 / 60) {

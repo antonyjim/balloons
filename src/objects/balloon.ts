@@ -53,7 +53,7 @@ export function updateBalloon(
                 // balloon.growing = false
                 // balloon.popped = true
                 // balloon.popTime = 0
-                popWithForce(balloons, balloon)
+                popWithForce(balloons, balloon, config)
                 return
             }
         }

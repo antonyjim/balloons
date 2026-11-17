@@ -1,3 +1,11 @@
+/** Rich pastels stay distinct after the balloon's highlights and shading. */
+export const pastelPalette = [
+    '#ff9fbd', '#ffb4a2', '#ffc48c', '#ffe28a',
+    '#e1ed98', '#b3e5a4', '#94e1bf', '#92dfd5',
+    '#9eddf3', '#a8c8ff', '#b8b0f6', '#d0a6ed',
+    '#e6a6e4', '#f5a4d3', '#f7b6ba', '#f4d0a1'
+] as const
+
 export interface ThemePalette {
     palette: readonly string[]
 }
@@ -118,7 +126,7 @@ export function varyColor(
 
     return hslToHex(
         hsl.h + randomOffset(hue),
-        clamp(hsl.s + randomOffset(saturation), 25, 100),
+        clamp(hsl.s + 8 + randomOffset(saturation), 40, 100),
         clamp(hsl.l + randomOffset(lightness), 25, 85)
     )
 }
@@ -167,4 +175,13 @@ export function getRandomPanelColors(
             }
         )
     )
+}
+/** Favor soft, colorful latex while retaining a little of the current theme. */
+export function getRandomLatexColor(theme: ThemePalette, random: () => number = Math.random): string {
+    const palette = random() < .8 || !theme.palette.length ? pastelPalette : theme.palette
+    const base = palette[Math.min(palette.length - 1, Math.floor(random() * palette.length))]
+    const hsl = hexToHsl(base)
+    return hslToHex(hsl.h + (random() * 2 - 1) * 8,
+        clamp(hsl.s + 8 + (random() * 2 - 1) * 5, 70, 94),
+        clamp(hsl.l + (random() * 2 - 1) * 4, 64, 80))
 }

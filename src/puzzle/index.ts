@@ -1,3 +1,5 @@
+import { generationProfiles, profileSettings, type GenerationProfile } from '../generationProfiles'
+import { layoutPixels } from '../pageScale'
 import { generationTypes, generationLabels, loadGenerationSettings, saveGenerationSettings, parseGenerationSettings } from '../generationSettings'
 import { createCelebration } from '../celebration'
 import { exportPuzzles, importPuzzles, MAX_PUZZLE_FILE_BYTES } from './transfer'
@@ -11,25 +13,34 @@ import { loadCollection, saveCollection, createPictureId, type SavedPicture } fr
 import { cropRect, adjustCrop, type CropRect, type CropHandle } from './crop'
 
 type Picture = SavedPicture & { image: string }
-export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve', detail: string, solved?: boolean, id?: string) => void = () => {}, showScreensaver: () => void = () => {}): { setActive(value: boolean): void } {
+export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve', detail: string, solved?: boolean, id?: string) => void = () => {}, showScreensaver: () => void = () => {}, sharedSettings = false): { setActive(value: boolean): void; setBackground(blob: Blob): Promise<void> } {
     const root = host.attachShadow({ mode: 'open' })
     const celebration = createCelebration(root)
     const accent = `hsl(${Math.floor(Math.random() * 360)} 48% 34%)`
     root.innerHTML = `<style>
     :host{--accent:${accent};font:16px system-ui;color:#344559}*{box-sizing:border-box}[hidden]{display:none!important}
-    main{height:100dvh;overflow:auto;background:#f8f3e9;padding:clamp(14px,3vw,36px)}header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;max-width:1100px;margin:auto}h1{font-size:clamp(24px,4vw,36px);margin:0;touch-action:none;user-select:none}p{margin:8px 0 18px;color:#657182}nav,.controls,.actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}button,a,select,.upload{font:inherit;border:1px solid #c7d1cb;border-radius:12px;background:white;color:inherit;padding:10px 16px;cursor:pointer;text-decoration:none}button:focus-visible,a:focus-visible,select:focus-visible,.upload:focus-within,h1:focus-visible{outline:3px solid var(--accent);outline-offset:3px}button:disabled{opacity:.5;cursor:default}.upload input{position:absolute;width:1px;height:1px;opacity:0}.controls{max-width:1100px;margin:24px auto}select{max-width:100%}.gallery{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}.picture{width:120px;padding:6px;text-align:left}.picture img{width:106px;height:80px;object-fit:cover;border-radius:8px}.picture span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.picture[aria-pressed=true]{outline:3px solid var(--accent)}.workspace{max-width:1100px;margin:24px auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:30px}.board-wrap{position:relative;align-self:start;border:8px solid white;border-radius:12px;overflow:hidden;background:#e2e8df;box-shadow:0 8px 30px #34455918}.board{position:relative;display:grid;aspect-ratio:1}.reference{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(1);opacity:.28;pointer-events:none}.slot{position:relative;border:0;border-radius:0;padding:0;background:transparent;aspect-ratio:1;min-width:0}.slot svg{position:absolute;left:-30%;top:-30%;width:160%;height:160%;overflow:visible;pointer-events:none}.slot.filled{border-color:transparent;z-index:1}.tray{display:grid;gap:8px;align-content:start}.piece{padding:0;border:0;background:transparent;aspect-ratio:1;min-width:0;touch-action:none}.piece svg{width:100%;height:100%;overflow:visible;filter:drop-shadow(0 3px 2px #243b5070);pointer-events:none}.piece[aria-pressed=true]{outline:3px solid var(--accent)}.ghost{position:fixed;z-index:100;pointer-events:none;opacity:.9}.message{max-width:1100px;margin:18px auto;min-height:24px}dialog{border:0;border-radius:20px;color:inherit;background:#f8f3e9;width:min(740px,94vw);max-height:90dvh;padding:24px;overflow:auto}dialog::backdrop{background:#182a3b88}dialog header{margin-bottom:20px}h2{margin:0;font-size:24px}.settings{display:flex;flex-wrap:wrap;gap:18px;margin:20px 0}.settings label{display:flex;align-items:center;gap:8px}.crop-stage{position:relative;width:min(100%,520px);margin:24px auto;user-select:none;touch-action:none}.crop-canvas{display:block;width:100%;height:auto}.crop-selection{position:absolute;border:2px solid white;outline:1px solid #253e50;box-shadow:0 0 0 100vmax #17263488;cursor:move;touch-action:none}.crop-stage{overflow:hidden}.crop-selection:focus-visible{outline:3px solid var(--accent)}.crop-handle{position:absolute;width:28px;height:28px;padding:0;border:0;border-radius:0;background:transparent;transform:translate(-50%,-50%);touch-action:none}.crop-handle::after{content:"";display:block;position:absolute;inset:8px;background:white;border:2px solid #253e50}.crop-handle[data-handle=nw],.crop-handle[data-handle=se]{cursor:nwse-resize}.crop-handle[data-handle=ne],.crop-handle[data-handle=sw]{cursor:nesw-resize}.crop-handle[data-handle=n],.crop-handle[data-handle=s]{cursor:ns-resize}.crop-handle[data-handle=e],.crop-handle[data-handle=w]{cursor:ew-resize}.menu-status{min-height:24px}small{display:block;margin:16px 0;color:#657182}@media(max-width:650px){.workspace{gap:16px;grid-template-columns:1fr}.tray{gap:12px}nav{gap:6px}nav a,nav button{padding:8px}.picture{width:95px}.picture img{width:81px;height:60px}}
+    main{height:var(--page-height,100dvh);overflow:auto;background:#f8f3e9;padding:clamp(14px,3vw,36px)}header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;max-width:1100px;margin:auto}h1{font-size:clamp(24px,4vw,36px);margin:0;touch-action:none;user-select:none}p{margin:8px 0 18px;color:#657182}nav,.controls,.actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}button,a,select,.upload{font:inherit;border:1px solid #c7d1cb;border-radius:12px;background:white;color:inherit;padding:10px 16px;cursor:pointer;text-decoration:none}button:focus-visible,a:focus-visible,select:focus-visible,.upload:focus-within,h1:focus-visible{outline:3px solid var(--accent);outline-offset:3px}button:disabled{opacity:.5;cursor:default}.upload input{position:absolute;width:1px;height:1px;opacity:0}.controls{max-width:1100px;margin:24px auto}select{max-width:100%}.gallery{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}.picture{width:120px;padding:6px;text-align:left}.picture img{width:106px;height:80px;object-fit:cover;border-radius:8px}.picture span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.picture[aria-pressed=true]{outline:3px solid var(--accent)}.workspace{max-width:1100px;margin:24px auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:30px}.board-wrap{position:relative;align-self:start;border:8px solid white;border-radius:12px;overflow:hidden;background:#e2e8df;box-shadow:0 8px 30px #34455918}.board{position:relative;display:grid;aspect-ratio:1}.reference{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(1);opacity:.28;pointer-events:none}.slot{position:relative;border:0;border-radius:0;padding:0;background:transparent;aspect-ratio:1;min-width:0}.slot svg{position:absolute;left:-30%;top:-30%;width:160%;height:160%;overflow:visible;pointer-events:none}.slot.filled{border-color:transparent;z-index:1}.tray{display:grid;gap:8px;align-content:start}.piece{padding:0;border:0;background:transparent;aspect-ratio:1;min-width:0;touch-action:none}.piece svg{width:100%;height:100%;overflow:visible;filter:drop-shadow(0 3px 2px #243b5070);pointer-events:none}.piece[aria-pressed=true]{outline:3px solid var(--accent)}.ghost{position:fixed;z-index:100;pointer-events:none;opacity:.9}.message{max-width:1100px;margin:18px auto;min-height:24px}dialog{border:0;border-radius:20px;color:inherit;background:#f8f3e9;width:min(740px,94vw);max-height:90dvh;padding:24px;overflow:auto}dialog::backdrop{background:#182a3b88}dialog header{margin-bottom:20px}h2{margin:0;font-size:24px}.settings{display:flex;flex-wrap:wrap;gap:18px;margin:20px 0}.settings label{display:flex;align-items:center;gap:8px}.crop-stage{position:relative;width:min(100%,520px);margin:24px auto;user-select:none;touch-action:none}.crop-canvas{display:block;width:100%;height:auto}.crop-selection{position:absolute;border:2px solid white;outline:1px solid #253e50;box-shadow:0 0 0 100vmax #17263488;cursor:move;touch-action:none}.crop-stage{overflow:hidden}.crop-selection:focus-visible{outline:3px solid var(--accent)}.crop-handle{position:absolute;width:28px;height:28px;padding:0;border:0;border-radius:0;background:transparent;transform:translate(-50%,-50%);touch-action:none}.crop-handle::after{content:"";display:block;position:absolute;inset:8px;background:white;border:2px solid #253e50}.crop-handle[data-handle=nw],.crop-handle[data-handle=se]{cursor:nwse-resize}.crop-handle[data-handle=ne],.crop-handle[data-handle=sw]{cursor:nesw-resize}.crop-handle[data-handle=n],.crop-handle[data-handle=s]{cursor:ns-resize}.crop-handle[data-handle=e],.crop-handle[data-handle=w]{cursor:ew-resize}.menu-status{min-height:24px}small{display:block;margin:16px 0;color:#657182}@media(max-width:650px){.workspace{gap:16px;grid-template-columns:1fr}.tray{gap:12px}nav{gap:6px}nav a,nav button{padding:8px}.picture{width:95px}.picture img{width:81px;height:60px}}
     .puzzle-layout{display:grid;grid-template-columns:170px minmax(0,1fr);gap:24px;max-width:1300px;margin:24px auto}.puzzle-pane{position:sticky;top:0;align-self:start;max-height:80dvh;overflow:auto;padding:12px;background:color-mix(in srgb,var(--accent) 12%,#f8f3e9);border-radius:14px}.puzzle-list{display:grid;gap:12px;margin-top:18px}.puzzle-list .picture{width:100%}.puzzle-list .picture img{width:100%;height:auto;aspect-ratio:4/3;object-fit:cover}.puzzle-list .picture span{white-space:normal;overflow-wrap:anywhere}.puzzle-content{min-width:0}.puzzle-content .controls{margin:0 auto}.puzzle-content .workspace{gap:18px}@media(max-width:650px){.puzzle-layout{grid-template-columns:100px minmax(0,1fr);gap:12px}.puzzle-pane{padding:8px}.puzzle-pane h2{font-size:18px}}
+    dialog{width:min(740px,calc(var(--page-width,100vw) - 32px));max-height:calc(var(--page-height,100dvh) - 32px)}
     h1,.puzzle-pane h2{color:var(--accent)}
-    </style><main><header><h1 id="puzzle-title" tabindex="0" title="Hold 2.5 seconds for puzzle menu; Alt+Enter with keyboard">Picture puzzles</h1><nav aria-label="Switch activity"><a href="#/sketchpad">Drawing</a><a href="#/matching">Letters</a><button id="puzzle-return" type="button">Return to bubbles</button></nav></header>
+    </style><main><header><h1 id="puzzle-title" tabindex="0" title="Hold 2.5 seconds for puzzle menu; Alt+Enter with keyboard">Picture puzzles</h1></header>
     <div class="puzzle-layout"><aside class="puzzle-pane" aria-label="Choose a puzzle"><h2>Puzzles</h2><div class="puzzle-list"></div></aside><div class="puzzle-content"><div class="controls"><button id="restart" disabled>Reset</button><button id="screensaver" type="button">Screensaver</button></div>
     <div class="message" role="status" aria-live="polite">Loading puzzles...</div><section class="workspace" hidden><div class="board-wrap"><img class="reference" alt="" hidden><div class="board" aria-label="Puzzle board"></div></div><div class="tray" aria-label="Puzzle pieces"></div></section></div></div></main>
     <dialog id="menu" aria-labelledby="menu-title"><header><h2 id="menu-title">Settings</h2><button id="close-menu">Done</button></header>
-    <div class="actions"><button id="activity-settings">Activity timer settings</button><button id="puzzle-settings">Puzzle settings</button><button id="balloon-settings">Balloon settings</button><button id="screensaver-settings">Screensaver settings</button></div><section id="balloon-settings-panel" hidden><h3>Balloon generation</h3><p>Relative weights for Random objects and automatic rotation. Set a weight to 0 to exclude it. Choosing a specific object still overrides the mix.</p><div class="settings">${generationTypes.map(type => `<label>${generationLabels[type]} <input data-weight="${type}" type="number" min="0" max="100" step="1" style="width:75px"></label>`).join('')}</div><label><input id="show-reset" type="checkbox"> Show Reset buttons</label><label><input id="release-on-full" type="checkbox"> Release on full ? keep holding to fill the screen</label><p id="generation-status" role="status"></p><button id="save-generation">Save balloon settings</button></section><section id="puzzle-settings-panel" hidden><h3>Puzzle settings</h3>
+    <div class="actions"><button id="activity-settings">Activity timer settings</button><button id="puzzle-settings">Puzzle settings</button><button id="balloon-settings">Balloon settings</button><button id="screensaver-settings">Screensaver settings</button></div><section id="balloon-settings-panel" hidden><h3>Balloon generation</h3><label>Profile <select id="generation-profile">${Object.entries(generationProfiles).map(([id, profile]) => `<option value="${id}">${profile.label}</option>`).join('')}</select></label><p id="profile-description"></p><button id="apply-generation-profile" type="button">Apply profile</button><p>Relative weights for Random objects and automatic rotation. Set a weight to 0 to exclude it. Choosing a specific object still overrides the mix.</p><div class="settings">${generationTypes.map(type => `<label>${generationLabels[type]} <input data-weight="${type}" type="number" min="0" max="100" step="1" style="width:75px"></label>`).join('')}</div><label><input id="show-reset" type="checkbox"> Show Reset buttons</label><label><input id="release-on-full" type="checkbox"> Continually spawn balloons while holding</label><div class="settings"><label>Inflation speed <input id="inflation-speed" type="number" min="0.1" max="5" step="0.1" style="width:85px"> &times; normal</label><label>Minimum diameter (px) <input id="min-balloon-size" type="number" min="10" max="1000" step="1" placeholder="Auto" style="width:90px"></label><label>Maximum diameter (px) <input id="max-balloon-size" type="number" min="10" max="1000" step="1" placeholder="Auto" style="width:90px"></label></div><p>Leave sizes blank for device defaults. Screen and scene limits may reduce sizes. Continuous spawning releases each filled balloon and starts another until you lift your finger or the screen is full.</p><h3>Impulses</h3><p>Multipliers: 0 is off, 0.3 gentle, 0.6 medium, 1 strong (original), up to 3 extra strong.</p><div class="settings">${['release', 'pop', 'push'].map(kind => `<label>${kind === 'release' ? 'Release kick' : kind === 'pop' ? 'Pop blast' : 'Collision push'} <input id="${kind}-impulse" type="number" min="0" max="3" step="0.1" style="width:85px"></label>`).join('')}</div><p id="generation-status" role="status"></p><button id="save-generation">Save balloon settings</button></section><section id="puzzle-settings-panel" hidden><h3>Puzzle settings</h3>
     <div class="settings"><label>Pieces <select id="size"><option value="random">Random (3, 4 or 5)</option><option value="3">3 x 3</option><option value="4">4 x 4</option><option value="5">5 x 5</option></select></label><label><input id="preview" type="checkbox"> Show picture underneath</label></div>
     <label>Puzzle name <input id="puzzle-name" maxlength="200"></label><h3>Saved pictures</h3><div class="gallery" aria-label="Saved pictures"></div><div class="actions"><label class="upload">Add image<input id="photos" type="file" accept="image/*"></label><button id="edit">Edit crop</button><button id="remove">Delete selected image</button></div>
     <div class="menu-status" role="status" aria-live="polite"></div><p><a id="puzzle-download" hidden>Download puzzle file</a></p><div class="actions"><button id="export-puzzle">Export selected puzzle</button><button id="save">Export all puzzles</button><label class="upload">Import puzzles<input id="load" type="file" accept=".dat,.txt,.json,application/octet-stream,text/plain,application/json"></label><button id="exit-fullscreen">Exit fullscreen</button></div><small>Images stay on this device in browser storage. Save a collection to keep a backup.</small></section></dialog>
     <dialog id="crop-dialog" aria-labelledby="crop-title"><header><h2 id="crop-title">Crop image</h2></header><label>Picture name <input id="picture-name" maxlength="200" required></label><p>Drag the corner or edge handles to crop. Drag inside the square to move it.</p><div class="crop-stage"><canvas id="crop-canvas" class="crop-canvas" width="800" height="800" aria-label="Original image"></canvas><div id="crop-selection" class="crop-selection" tabindex="0" aria-label="Crop area. Use arrow keys to move."></div></div><div class="actions"><button id="crop-save">Save image</button><button id="crop-cancel">Cancel</button></div><p id="crop-status" role="status"></p></dialog>`
-    const get = <T extends HTMLElement>(selector: string): T => root.querySelector<T>(selector)!
+    // Settings live outside the game host so they remain available in every activity.
+    let settingsRoot: ShadowRoot = root
+    if (sharedSettings) {
+        const settingsHost = document.createElement('div')
+        document.body.append(settingsHost)
+        settingsRoot = settingsHost.attachShadow({ mode: 'open' })
+        settingsRoot.append(root.querySelector('style')!.cloneNode(true), root.querySelector('#menu')!, root.querySelector('#crop-dialog')!)
+    }
+    const get = <T extends HTMLElement>(selector: string): T => (root.querySelector<T>(selector) ?? settingsRoot.querySelector<T>(selector))!
     const gallery = get('.gallery'), board = get('.board'), tray = get('.tray'), message = get('.message')
     const sizeSelect = get<HTMLSelectElement>('#size'), reference = get<HTMLImageElement>('.reference')
     const puzzleList = get('.puzzle-list'), menu = get<HTMLDialogElement>('#menu')
@@ -58,10 +69,21 @@ export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve
     })
     const stopCamera = (): void => { camera.stop(); cameraMode = false; cameraFrame = '' }
 
+    let drawingBackground: Blob | undefined, drawingBackgroundUrl: string | undefined
+    const applyDrawingBackground = async (blob: Blob): Promise<void> => {
+        const url = URL.createObjectURL(blob)
+        try { const image = new Image(); image.src = url; await image.decode() } catch (error) { URL.revokeObjectURL(url); throw error }
+        if (drawingBackgroundUrl) URL.revokeObjectURL(drawingBackgroundUrl)
+        drawingBackground = blob; drawingBackgroundUrl = url
+        get('main').style.backgroundImage = `linear-gradient(#f8f3e9aa, #f8f3e9aa), url("${url}")`
+        get('main').style.backgroundSize = 'cover'
+        get('main').style.backgroundPosition = 'center'
+        get('main').style.backgroundAttachment = 'fixed'
+    }
     const drags = new Map<number, { id: number; piece: HTMLButtonElement; ghost: HTMLElement; x: number; y: number }>()
     let saveQueue = Promise.resolve()
     const persist = (): Promise<void> => {
-        const collection = { pictures: pictures.map(({ image, ...p }) => p), size, preview: preview.checked, current: pictures[current]?.id, progress: structuredClone(progress), cameraPreview, randomSize }
+        const collection = { background: drawingBackground, pictures: pictures.map(({ image, ...p }) => p), size, preview: preview.checked, current: pictures[current]?.id, progress: structuredClone(progress), cameraPreview, randomSize }
         const work = saveQueue.then(() => saveCollection(collection))
         saveQueue = work.catch(() => { menuStatus.textContent = 'Could not save on this device. Save a text collection as a backup, then try again.' })
         return work
@@ -155,7 +177,7 @@ export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve
                 if (!active || menu.open || event.button !== 0 || placed.has(id) || drags.has(event.pointerId) || [...drags.values()].some(drag => drag.id === id)) return
                 select(id)
                 const rect = piece.getBoundingClientRect(), ghost = piece.cloneNode(true) as HTMLElement
-                ghost.classList.add('ghost'); ghost.style.width = `${rect.width}px`; ghost.style.left = `${rect.left}px`; ghost.style.top = `${rect.top}px`; root.append(ghost)
+                ghost.classList.add('ghost'); ghost.style.width = `${layoutPixels(rect.width)}px`; ghost.style.left = `${layoutPixels(rect.left)}px`; ghost.style.top = `${layoutPixels(rect.top)}px`; root.append(ghost)
                 suppressClick = false
                 drags.set(event.pointerId, { id, piece, ghost, x: event.clientX - rect.left, y: event.clientY - rect.top })
                 piece.setPointerCapture(event.pointerId)
@@ -164,7 +186,7 @@ export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve
                 const drag = drags.get(event.pointerId)
                 if (!drag || drag.id !== id) return
                 suppressClick = true
-                drag.ghost.style.left = `${event.clientX - drag.x}px`; drag.ghost.style.top = `${event.clientY - drag.y}px`
+                drag.ghost.style.left = `${layoutPixels(event.clientX - drag.x)}px`; drag.ghost.style.top = `${layoutPixels(event.clientY - drag.y)}px`
             }
             piece.onpointerup = event => {
                 const drag = drags.get(event.pointerId)
@@ -214,7 +236,9 @@ export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve
     }
     sizeSelect.onchange = () => { checkpoint(); randomSize = sizeSelect.value === 'random'; if (!randomSize) size = Number(sizeSelect.value); start(true); save() }
     get('#screensaver').onclick = () => { checkpoint(); save(); cancel(); showScreensaver() }
-    get('#restart').onclick = () => { start(true); save() }
+    const resetPuzzle = (): void => { start(true); save() }
+    get('#restart').onclick = resetPuzzle
+    window.addEventListener('hidden-game-reset', event => { if (active && (event as CustomEvent).detail === 'puzzle') resetPuzzle() })
     get('#remove').onclick = () => {
         checkpoint()
         const removed = pictures.splice(current, 1)[0]
@@ -234,20 +258,20 @@ export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve
     const cancelHold = (): void => { clearTimeout(hold); hold = undefined; holdPointer = null }
     const openMenu = (): void => {
         cancelHold(); cancel()
-        if (active && loaded && !menu.open) { get('#puzzle-settings-panel').hidden = true; get('#balloon-settings-panel').hidden = true; menu.showModal() }
+        if (!menu.open) { get('#puzzle-settings-panel').hidden = true; get('#balloon-settings-panel').hidden = true; menu.showModal() }
     }
     title.onpointerdown = event => {
         if (event.button !== 0 || holdPointer !== null) return
         holdPointer = event.pointerId; holdX = event.clientX; holdY = event.clientY
         title.setPointerCapture(event.pointerId)
-        hold = setTimeout(openMenu, 2500)
+        hold = setTimeout(() => window.dispatchEvent(new Event('open-shared-menu')), 2500)
     }
     title.onpointermove = event => {
         if (event.pointerId === holdPointer && Math.hypot(event.clientX - holdX, event.clientY - holdY) > 12) cancelHold()
     }
     title.onpointerup = cancelHold; title.onpointercancel = cancelHold; title.onlostpointercapture = cancelHold
     title.oncontextmenu = event => event.preventDefault()
-    title.onkeydown = event => { if (event.altKey && event.key === 'Enter') { event.preventDefault(); openMenu() } }
+    title.onkeydown = event => { if (event.altKey && event.key === 'Enter') { event.preventDefault(); window.dispatchEvent(new Event('open-shared-menu')) } }
     const syncReset = (): void => { get('#restart').hidden = !loadGenerationSettings().showReset }
     syncReset()
     window.addEventListener('generation-settings-changed', syncReset)
@@ -256,16 +280,40 @@ export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve
         get('#puzzle-settings-panel').hidden = true
         get('#balloon-settings-panel').hidden = false
         const settings = loadGenerationSettings()
+        if (settings.profile) profileSelect.value = settings.profile
         for (const type of generationTypes) get<HTMLInputElement>(`[data-weight="${type}"]`).value = String(settings.weights[type])
         get<HTMLInputElement>('#show-reset').checked = settings.showReset
         get<HTMLInputElement>('#release-on-full').checked = settings.releaseOnFull
+        get<HTMLInputElement>('#inflation-speed').value = String(settings.inflationSpeed)
+        get<HTMLInputElement>('#min-balloon-size').value = settings.minSize === null ? '' : String(settings.minSize)
+        get<HTMLInputElement>('#max-balloon-size').value = settings.maxSize === null ? '' : String(settings.maxSize)
+        get<HTMLInputElement>('#release-impulse').value = String(settings.releaseImpulse)
+        get<HTMLInputElement>('#pop-impulse').value = String(settings.popImpulse)
+        get<HTMLInputElement>('#push-impulse').value = String(settings.pushImpulse)
+        updateProfileDescription()
+    }
+    const profileSelect = get<HTMLSelectElement>('#generation-profile')
+    const updateProfileDescription = (): void => { get('#profile-description').textContent = generationProfiles[profileSelect.value as GenerationProfile]?.description ?? '' }
+    profileSelect.onchange = updateProfileDescription
+    get('#apply-generation-profile').onclick = () => {
+        const id = profileSelect.value as GenerationProfile
+        if (!Object.hasOwn(generationProfiles, id)) return
+        saveGenerationSettings({ ...profileSettings(id), showReset: loadGenerationSettings().showReset })
+        window.dispatchEvent(new Event('generation-profile-applied'))
+        get('#balloon-settings').click()
+        get('#generation-status').textContent = `${generationProfiles[id].label} applied.`
+        if (generationProfiles[id].hideMenu) { menu.close(); window.dispatchEvent(new CustomEvent('menu-enabled-change', { detail: false })) }
     }
     get('#save-generation').onclick = () => {
         const inputs = generationTypes.map(type => get<HTMLInputElement>(`[data-weight="${type}"]`))
         if (!inputs.every(input => input.reportValidity())) return
+        const speed = get<HTMLInputElement>('#inflation-speed'), min = get<HTMLInputElement>('#min-balloon-size'), max = get<HTMLInputElement>('#max-balloon-size')
+        const release = get<HTMLInputElement>('#release-impulse'), pop = get<HTMLInputElement>('#pop-impulse'), push = get<HTMLInputElement>('#push-impulse')
+        if (![speed, min, max, release, pop, push].every(input => input.reportValidity())) return
+        if (min.value && max.value && Number(min.value) > Number(max.value)) { get('#generation-status').textContent = 'Minimum size must not exceed maximum size.'; return }
         const weights = Object.fromEntries(generationTypes.map((type, i) => [type, Number(inputs[i].value)]))
         if (!Object.values(weights).some(weight => weight > 0)) { get('#generation-status').textContent = 'Give at least one object a weight above zero.'; return }
-        saveGenerationSettings(parseGenerationSettings({ weights, showReset: get<HTMLInputElement>('#show-reset').checked, releaseOnFull: get<HTMLInputElement>('#release-on-full').checked }))
+        saveGenerationSettings(parseGenerationSettings({ ...loadGenerationSettings(), weights, releaseImpulse: Number(release.value), popImpulse: Number(pop.value), pushImpulse: Number(push.value), inflationSpeed: Number(speed.value), minSize: min.value ? Number(min.value) : null, maxSize: max.value ? Number(max.value) : null, showReset: get<HTMLInputElement>('#show-reset').checked, releaseOnFull: get<HTMLInputElement>('#release-on-full').checked }))
         get('#generation-status').textContent = 'Saved.'
     }
     get('#puzzle-settings').onclick = () => { get('#balloon-settings-panel').hidden = true; get('#puzzle-settings-panel').hidden = false }
@@ -303,7 +351,7 @@ export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve
         try {
             if (source.size > 30_000_000) throw new Error()
             const image = new Image(); image.src = url; await image.decode()
-            if (token !== cropToken || !active || !menu.open) { URL.revokeObjectURL(url); return }
+            if (token !== cropToken || !menu.open) { URL.revokeObjectURL(url); return }
             edit = { source, image, url, name, id }
             get<HTMLInputElement>('#picture-name').value = name
             crop = cropRect(image.naturalWidth, image.naturalHeight, 1, .5, .5)
@@ -476,14 +524,13 @@ export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve
             menuStatus.textContent = error instanceof Error ? error.message : 'Could not import puzzles. Choose a puzzle export text file.'
         } finally { importing = false }
     }
-    get('#puzzle-return').onclick = () => { location.hash = '/balloons' }
-    for (const link of root.querySelectorAll<HTMLElement>('nav a, #puzzle-return')) bindActivation(link)
     window.addEventListener('pagehide', () => { checkpoint(); save() })
     document.addEventListener('visibilitychange', () => { if (document.hidden) { checkpoint(); save() } if (document.hidden && cameraMode) { stopCamera(); drawGallery(); start() } })
     document.addEventListener('activity-idle', () => { if (cameraMode) { stopCamera(); drawGallery(); start() } })
     window.addEventListener('blur', () => { cancel(); cancelHold(); stopPan() })
     window.addEventListener('resize', () => { cancel(); cancelHold(); stopPan() })
-    void loadCollection().then(collection => {
+    const ready = loadCollection().then(async collection => {
+        if (collection.background) await applyDrawingBackground(collection.background)
         progress = collection.progress ?? {}; cameraPreview = collection.cameraPreview ?? ''
         pictures = collection.pictures.map(p => ({ ...p, image: URL.createObjectURL(p.blob) }))
         size = collection.size; randomSize = collection.randomSize === true; preview.checked = collection.preview; sizeSelect.value = randomSize ? 'random' : String(size)
@@ -493,7 +540,17 @@ export function mountPuzzle(host: HTMLElement, audit: (kind: 'activity' | 'solve
         loaded = true; drawGallery(); start()
         menuStatus.textContent = 'Browser storage is unavailable. Added images may last only for this visit; use Save collection to keep a backup.'
     })
-    return { setActive(value) {
+    window.addEventListener('shared-game-settings', event => {
+        openMenu()
+        const section = (event as CustomEvent<string>).detail
+        if (section === 'puzzle' || section === 'balloon') get(`#${section}-settings`).click()
+    })
+    window.addEventListener('shared-menu-requested', () => { if (menu.open) menu.close() })
+    return { async setBackground(blob) {
+        await ready
+        await applyDrawingBackground(blob)
+        await persist()
+    }, setActive(value) {
         const resuming = value && !active
         active = value
         if (resuming && loaded && !cameraMode) { start(); save() }

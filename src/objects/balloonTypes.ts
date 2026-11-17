@@ -31,6 +31,7 @@ export interface BalloonConfig extends Partial<PhysicsOptions> {
     maxRadius?: number
     maxRadiusScreenRatio?: number
     maxObjectAreaRatio?: number
+    maxObjects?: number
     maxSceneAreaRatio?: number
 
     popAtMax: boolean
